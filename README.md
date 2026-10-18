@@ -133,6 +133,10 @@ The strip is one 800×100 scene sliced per dial. Fleet bar: one block per host c
 
 The XL page "LCARS" holds 24 Inbox Keys in **wall** layout: slot n is the n-th agent across all hosts in Ops's order (blocked first, then most recent), no paging. Row 4 is free for the global keys of milestone 7. New agents appear as soon as Ops sees their first status event; keys beyond the agent count stay black.
 
+### Travel deck (15-key MK.2)
+
+Page "LCARS travel": six Inbox Keys in wall layout, Attach keys for the local Herdr and the remote host over mosh and tmux, Dictate, Stop All and Mute Bell. Three keys stay free.
+
 ### Deck layout
 
 The Plus page "LCARS" (8 Inbox Keys, slots 1–8, plus the four dials) was written with [streamdeck-mcp](https://github.com/verygoodplugins/streamdeck-mcp)'s profile manager, which edits Elgato's `ProfilesV3` files directly and must quit and relaunch the Stream Deck app around the write. Reproducible profile generation from a spec is milestone 7.
