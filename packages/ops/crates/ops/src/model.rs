@@ -351,21 +351,21 @@ mod tests {
 
     #[test]
     fn connect_then_disconnect_tracks_host_status() {
-        let mut fleet = Fleet::with_hosts(["ds9"], T0);
-        assert!(!fleet.hosts["ds9"].connected);
+        let mut fleet = Fleet::with_hosts(["mini"], T0);
+        assert!(!fleet.hosts["mini"].connected);
         assert!(fleet.apply(
-            "ds9",
+            "mini",
             HostEvent::Connected {
                 version: "0.9.0".into(),
                 protocol: 22
             },
             T0 + 1
         ));
-        assert!(fleet.hosts["ds9"].connected);
-        assert_eq!(fleet.hosts["ds9"].version.as_deref(), Some("0.9.0"));
+        assert!(fleet.hosts["mini"].connected);
+        assert_eq!(fleet.hosts["mini"].version.as_deref(), Some("0.9.0"));
         // Same connect again is a no-op.
         assert!(!fleet.apply(
-            "ds9",
+            "mini",
             HostEvent::Connected {
                 version: "0.9.0".into(),
                 protocol: 22
@@ -373,28 +373,28 @@ mod tests {
             T0 + 2
         ));
         assert!(fleet.apply(
-            "ds9",
+            "mini",
             HostEvent::Disconnected {
                 error: "EOF".into()
             },
             T0 + 3
         ));
-        assert!(!fleet.hosts["ds9"].connected);
-        assert_eq!(fleet.hosts["ds9"].error.as_deref(), Some("EOF"));
-        assert_eq!(fleet.hosts["ds9"].updated_at_ms, T0 + 3);
+        assert!(!fleet.hosts["mini"].connected);
+        assert_eq!(fleet.hosts["mini"].error.as_deref(), Some("EOF"));
+        assert_eq!(fleet.hosts["mini"].updated_at_ms, T0 + 3);
     }
 
     #[test]
     fn recorded_status_flow_replays_to_the_expected_states() {
         let mut fleet = Fleet::default();
         let pane = pane_from_fixture();
-        assert!(fleet.apply("daystrom", HostEvent::PaneCreated(Box::new(pane)), T0));
-        let session = &fleet.sessions["daystrom/w9:p2"];
+        assert!(fleet.apply("studio", HostEvent::PaneCreated(Box::new(pane)), T0));
+        let session = &fleet.sessions["studio/w9:p2"];
         assert_eq!(session.state, AgentState::Unknown);
         assert_eq!(session.agent, None);
         assert_eq!(
             session.cwd.as_deref(),
-            Some("/Users/vikgamov/projects/lcars")
+            Some("/Users/me/projects/lcars")
         );
 
         // Recorded sequence: working, unknown, blocked, unknown, idle, unknown.
@@ -416,15 +416,15 @@ mod tests {
         let mut t = T0;
         for event in events {
             t += 100;
-            assert!(fleet.apply("daystrom", HostEvent::StatusChanged(event), t));
+            assert!(fleet.apply("studio", HostEvent::StatusChanged(event), t));
         }
-        let session = &fleet.sessions["daystrom/w9:p2"];
+        let session = &fleet.sessions["studio/w9:p2"];
         assert_eq!(session.state, AgentState::Unknown);
         assert_eq!(session.agent.as_deref(), Some("lcars-test"));
         assert_eq!(session.updated_at_ms, T0 + 600);
 
         assert!(fleet.apply(
-            "daystrom",
+            "studio",
             HostEvent::PaneClosed {
                 pane_id: "w9:p2".into()
             },
@@ -433,7 +433,7 @@ mod tests {
         assert!(fleet.sessions.is_empty());
         // Closing again changes nothing.
         assert!(!fleet.apply(
-            "daystrom",
+            "studio",
             HostEvent::PaneClosed {
                 pane_id: "w9:p2".into()
             },
@@ -479,8 +479,8 @@ mod tests {
         fleet.apply("other", HostEvent::PaneCreated(Box::new(pane.clone())), T0);
 
         let agent_json = serde_json::json!({
-            "agent":"claude","agent_status":"working","cwd":"/Users/vikgamov/projects/lcars",
-            "focused":true,"foreground_cwd":"/Users/vikgamov/projects/lcars","name":"ops-dev",
+            "agent":"claude","agent_status":"working","cwd":"/Users/me/projects/lcars",
+            "focused":true,"foreground_cwd":"/Users/me/projects/lcars","name":"ops-dev",
             "pane_id":"w9:p2","revision":5,"state_change_seq":4672,"tab_id":"w9:t1",
             "terminal_id":"term_65e1ea01c6a2915","terminal_title":"◑ Coding","terminal_title_stripped":"Coding",
             "tokens":{"model":"fable-5-1","summary":"[Request interrupted by user]"},"workspace_id":"w9"
@@ -494,7 +494,7 @@ mod tests {
             .insert("model".into(), "fable-5-1".into());
 
         assert!(fleet.apply(
-            "daystrom",
+            "studio",
             HostEvent::Snapshot {
                 panes: vec![working_pane.clone()],
                 agents: vec![agent],
@@ -502,7 +502,7 @@ mod tests {
             T0 + 1
         ));
         assert_eq!(fleet.sessions.len(), 2, "other host's session survives");
-        let session = &fleet.sessions["daystrom/w9:p2"];
+        let session = &fleet.sessions["studio/w9:p2"];
         assert_eq!(session.name.as_deref(), Some("ops-dev"));
         assert_eq!(session.seq, 4672);
         assert_eq!(session.model.as_deref(), Some("fable-5-1"));
@@ -516,7 +516,7 @@ mod tests {
         }))
         .unwrap();
         assert!(!fleet.apply(
-            "daystrom",
+            "studio",
             HostEvent::Snapshot {
                 panes: vec![working_pane],
                 agents: vec![agent_again],
@@ -526,7 +526,7 @@ mod tests {
 
         // Empty snapshot clears the host.
         assert!(fleet.apply(
-            "daystrom",
+            "studio",
             HostEvent::Snapshot {
                 panes: vec![],
                 agents: vec![]

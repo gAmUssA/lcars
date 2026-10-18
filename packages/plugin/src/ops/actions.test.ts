@@ -34,16 +34,16 @@ function serve(status: number, reply: string): Promise<{ url: string; seen: Seen
 
 test("focus posts the session id to /actions", async () => {
   const { url, seen } = await serve(200, '{"ok":true}');
-  await createOpsActions({ url }).focus("ds9/w7:p1");
+  await createOpsActions({ url }).focus("mini/w7:p1");
   expect(seen).toHaveLength(1);
   expect(seen[0].method).toBe("POST");
   expect(seen[0].url).toBe("/actions");
-  expect(JSON.parse(seen[0].body)).toEqual({ action: "focus", session: "ds9/w7:p1" });
+  expect(JSON.parse(seen[0].body)).toEqual({ action: "focus", session: "mini/w7:p1" });
 });
 
 test("a failure surfaces the status and Ops's error text", async () => {
-  const { url } = await serve(502, '{"ok":false,"error":"no SSH master for ds9"}');
-  await expect(createOpsActions({ url }).focus("ds9/w7:p1")).rejects.toThrow(/502: no SSH master for ds9/);
+  const { url } = await serve(502, '{"ok":false,"error":"no SSH master for mini"}');
+  await expect(createOpsActions({ url }).focus("mini/w7:p1")).rejects.toThrow(/502: no SSH master for mini/);
 });
 
 test("a non-JSON failure still reports the status", async () => {
@@ -53,13 +53,13 @@ test("a non-JSON failure still reports the status", async () => {
 
 test("scroll posts the delta and returns the applied offset", async () => {
   const { url, seen } = await serve(200, '{"ok":true,"offset_from_bottom":13}');
-  const offset = await createOpsActions({ url }).scroll("ds9/w7:p1", 3);
+  const offset = await createOpsActions({ url }).scroll("mini/w7:p1", 3);
   expect(offset).toBe(13);
-  expect(JSON.parse(seen[0].body)).toEqual({ action: "scroll", session: "ds9/w7:p1", delta: 3 });
+  expect(JSON.parse(seen[0].body)).toEqual({ action: "scroll", session: "mini/w7:p1", delta: 3 });
 });
 
 test("prompt posts the text", async () => {
   const { url, seen } = await serve(200, '{"ok":true}');
-  await createOpsActions({ url }).prompt("daystrom/w1:p1", "/effort high");
-  expect(JSON.parse(seen[0].body)).toEqual({ action: "prompt", session: "daystrom/w1:p1", text: "/effort high" });
+  await createOpsActions({ url }).prompt("studio/w1:p1", "/effort high");
+  expect(JSON.parse(seen[0].body)).toEqual({ action: "prompt", session: "studio/w1:p1", text: "/effort high" });
 });

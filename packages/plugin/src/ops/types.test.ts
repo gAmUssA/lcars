@@ -1,21 +1,21 @@
 import { expect, test } from "vitest";
 import { parseFleetView } from "./types";
 
-// Recorded from a live `GET /sessions` on Daystrom, 2026-10-18 (trimmed).
+// Recorded from a live `GET /sessions` on Studio, 2026-10-18 (trimmed).
 const LIVE = JSON.stringify({
   hosts: [
-    { name: "daystrom", connected: true, version: "0.9.4", protocol: 22, error: null, updated_at_ms: 1760801746966 },
-    { name: "ds9", connected: true, version: "0.9.0", protocol: 22, error: null, updated_at_ms: 1760801747009 },
+    { name: "studio", connected: true, version: "0.9.4", protocol: 22, error: null, updated_at_ms: 1760801746966 },
+    { name: "mini", connected: true, version: "0.9.0", protocol: 22, error: null, updated_at_ms: 1760801747009 },
   ],
   sessions: [
     {
-      id: "daystrom/w9:p1", host: "daystrom", workspace_id: "w9", tab_id: "w9:t1", pane_id: "w9:p1",
+      id: "studio/w9:p1", host: "studio", workspace_id: "w9", tab_id: "w9:t1", pane_id: "w9:p1",
       agent: "claude", name: null, state: "working", title: "Coding policy plugin from Tessl",
-      cwd: "/Users/vikgamov/projects/lcars", model: "fable-5-1", summary: "[Request interrupted by user]",
+      cwd: "/Users/me/projects/lcars", model: "fable-5-1", summary: "[Request interrupted by user]",
       focused: true, seq: 4672, updated_at_ms: 1760801747080,
     },
     {
-      id: "ds9/w7:p2", host: "ds9", workspace_id: "w7", tab_id: "w7:t1", pane_id: "w7:p2",
+      id: "mini/w7:p2", host: "mini", workspace_id: "w7", tab_id: "w7:t1", pane_id: "w7:p2",
       agent: null, name: null, state: "unknown", title: null, cwd: null, model: null, summary: null,
       focused: false, seq: 0, updated_at_ms: 1760801747120,
     },
@@ -25,8 +25,8 @@ const LIVE = JSON.stringify({
 test("parses a live Ops view", () => {
   const view = parseFleetView(LIVE);
   expect(view.hosts.map((h) => [h.name, h.connected, h.version])).toEqual([
-    ["daystrom", true, "0.9.4"],
-    ["ds9", true, "0.9.0"],
+    ["studio", true, "0.9.4"],
+    ["mini", true, "0.9.0"],
   ]);
   expect(view.sessions[0].state).toBe("working");
   expect(view.sessions[0].model).toBe("fable-5-1");

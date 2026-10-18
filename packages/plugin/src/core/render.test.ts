@@ -46,7 +46,7 @@ test("status glyph sits in the top-left corner, title under the logo", () => {
 });
 
 test("host tag appears only when given", () => {
-  expect(decode(renderKeySvg({ ...base, host: "DS9" }))).toContain(">DS9<");
+  expect(decode(renderKeySvg({ ...base, host: "Mini" }))).toContain(">Mini<");
   expect(decode(renderKeySvg(base))).not.toContain('text-anchor="end"');
 });
 

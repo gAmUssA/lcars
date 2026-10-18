@@ -159,23 +159,23 @@ mod tests {
 
     #[test]
     fn rejects_overlong_local_socket_path() {
-        let long = PathBuf::from(format!("/{}/ds9.sock", "x".repeat(120)));
-        let err = Transport::ssh("ds9".into(), "/r.sock".into(), "/cm".into(), long).unwrap_err();
+        let long = PathBuf::from(format!("/{}/mini.sock", "x".repeat(120)));
+        let err = Transport::ssh("mini".into(), "/r.sock".into(), "/cm".into(), long).unwrap_err();
         assert!(err.to_string().contains("OPS_STATE_DIR"), "{err}");
     }
 
     #[test]
     fn accepts_short_local_socket_path() {
         let transport = Transport::ssh(
-            "ds9".into(),
+            "mini".into(),
             "/Users/v/.config/herdr/herdr.sock".into(),
-            "/Users/v/.ssh/cm-ds9".into(),
-            "/Users/v/.local/state/ops/ds9.sock".into(),
+            "/Users/v/.ssh/cm-mini".into(),
+            "/Users/v/.local/state/ops/mini.sock".into(),
         )
         .unwrap();
         assert_eq!(
             transport.describe(),
-            "ssh ds9:/Users/v/.config/herdr/herdr.sock"
+            "ssh mini:/Users/v/.config/herdr/herdr.sock"
         );
     }
 

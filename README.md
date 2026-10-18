@@ -9,6 +9,12 @@ Stream Deck console for coding agents, backed by [Herdr](https://herdr.dev). The
 
 Recon notes on the Herdr socket API, with recorded frames as test fixtures: [docs/herdr-api.md](docs/herdr-api.md).
 
+## Screenshots
+
+Stream Deck XL, agent wall page: one key per agent across both hosts (host tag top-right, agent logo, state colour, pane title).
+
+![Stream Deck app showing the XL LCARS page](docs/images/stream-deck-xl-wall.png)
+
 ## Status
 
 | Milestone | State |
@@ -49,7 +55,7 @@ curl -s http://127.0.0.1:7677/sessions | jq .
 Remote hosts ride an SSH ControlMaster you open once after login (1Password holds the keys, Ops never prompts):
 
 ```sh
-ssh -fNM -o ControlPath=~/.ssh/cm-ds9 -o ControlPersist=8h ds9
+ssh -fNM -o ControlPath=~/.ssh/cm-mini -o ControlPersist=8h mini
 ```
 
 Ops logs to stdout; `RUST_LOG=ops=debug` for the subscription detail. Design record: [docs/adr/0001-ops-architecture.md](docs/adr/0001-ops-architecture.md).

@@ -22,14 +22,14 @@ function s(id: string, over: Partial<Session> = {}): Session {
 }
 
 const keys = [
-  s("ds9/w7:p1", { state: "blocked", updated_at_ms: 50 }),
-  s("daystrom/w1:p1", { state: "working", focused: true }),
-  s("daystrom/w1:p2", { state: "blocked", updated_at_ms: 10 }),
-  s("daystrom/w1:p3"),
+  s("mini/w7:p1", { state: "blocked", updated_at_ms: 50 }),
+  s("studio/w1:p1", { state: "working", focused: true }),
+  s("studio/w1:p2", { state: "blocked", updated_at_ms: 10 }),
+  s("studio/w1:p3"),
 ];
 
 test("host filter keeps only that host, null keeps all", () => {
-  expect(filterByHost(keys, "ds9").map((k) => k.id)).toEqual(["ds9/w7:p1"]);
+  expect(filterByHost(keys, "mini").map((k) => k.id)).toEqual(["mini/w7:p1"]);
   expect(filterByHost(keys, null)).toHaveLength(4);
 });
 
@@ -45,11 +45,11 @@ test("paging is eight per page and clamps", () => {
 });
 
 test("host cycle goes all → each host → all, both directions", () => {
-  const hosts = ["daystrom", "ds9"];
-  expect(cycleHost(hosts, null, 1)).toBe("daystrom");
-  expect(cycleHost(hosts, "daystrom", 1)).toBe("ds9");
-  expect(cycleHost(hosts, "ds9", 1)).toBeNull();
-  expect(cycleHost(hosts, null, -1)).toBe("ds9");
+  const hosts = ["studio", "mini"];
+  expect(cycleHost(hosts, null, 1)).toBe("studio");
+  expect(cycleHost(hosts, "studio", 1)).toBe("mini");
+  expect(cycleHost(hosts, "mini", 1)).toBeNull();
+  expect(cycleHost(hosts, null, -1)).toBe("mini");
   expect(cycleHost([], null, 1)).toBeNull();
 });
 
@@ -61,26 +61,26 @@ test("effort cycles through the levels and stops at the ends", () => {
 });
 
 test("blocked sessions come oldest first", () => {
-  expect(blockedSessions(keys).map((k) => k.id)).toEqual(["daystrom/w1:p2", "ds9/w7:p1"]);
+  expect(blockedSessions(keys).map((k) => k.id)).toEqual(["studio/w1:p2", "mini/w7:p1"]);
 });
 
 test("focused session prefers the deck's own host", () => {
-  const both = [...keys, s("ds9/w7:p9", { focused: true })];
-  expect(focusedSession(both, "daystrom")?.id).toBe("daystrom/w1:p1");
-  expect(focusedSession(both, "ds9")?.id).toBe("ds9/w7:p9");
-  expect(focusedSession(both, "voyager")?.id).toBe("daystrom/w1:p1");
+  const both = [...keys, s("mini/w7:p9", { focused: true })];
+  expect(focusedSession(both, "studio")?.id).toBe("studio/w1:p1");
+  expect(focusedSession(both, "mini")?.id).toBe("mini/w7:p9");
+  expect(focusedSession(both, "laptop")?.id).toBe("studio/w1:p1");
   expect(focusedSession([s("h/p1")], "h")).toBeNull();
 });
 
 test("host summaries count states and pick the worst", () => {
   const view: FleetView = {
     hosts: [
-      { name: "daystrom", connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 },
-      { name: "ds9", connected: false, version: null, protocol: null, error: "down", updated_at_ms: 0 },
+      { name: "studio", connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 },
+      { name: "mini", connected: false, version: null, protocol: null, error: "down", updated_at_ms: 0 },
     ],
     sessions: [],
   };
-  expect(hostNames(view)).toEqual(["daystrom", "ds9"]);
+  expect(hostNames(view)).toEqual(["studio", "mini"]);
   const summary = summariseHosts(view, keys);
   expect(summary[0].worst).toBe("blocked");
   expect(summary[0].counts).toEqual({ blocked: 1, done: 0, working: 1, idle: 1, unknown: 0 });

@@ -125,8 +125,8 @@ mod tests {
     }
 
     #[test]
-    fn ds9_pong_without_ssh_agent_flag_still_parses() {
-        let line = r#"{"id":"ops:ds9:1","result":{"type":"pong","version":"0.9.0","protocol":22,"capabilities":{"live_handoff":true,"detached_server_daemon":true,"endpoint_protocol_generation":1,"surface_interest":true,"health_check":true}}}"#;
+    fn mini_pong_without_ssh_agent_flag_still_parses() {
+        let line = r#"{"id":"ops:mini:1","result":{"type":"pong","version":"0.9.0","protocol":22,"capabilities":{"live_handoff":true,"detached_server_daemon":true,"endpoint_protocol_generation":1,"surface_interest":true,"health_check":true}}}"#;
         match parse_frame(line).unwrap() {
             Frame::Response(response) => assert!(matches!(
                 response.result,

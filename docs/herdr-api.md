@@ -1,6 +1,6 @@
 # Herdr socket API — recon findings
 
-Recorded 2026-10-18 on Daystrom (Mac Studio) against the live local Herdr server. Everything below was observed, not read from docs. Raw frames live in `docs/fixtures/` and are the test fixtures for Ops.
+Recorded 2026-10-18 on Studio (Mac Studio) against the live local Herdr server. Everything below was observed, not read from docs. Raw frames live in `docs/fixtures/` and are the test fixtures for Ops.
 
 ## Versions
 
@@ -29,7 +29,7 @@ Conclusion: `herdr-compat` is usable as-is for protocol 22 / 0.9.4. Ops should s
 
 ### Drift against the handoff doc
 
-- `herdr --machine <label-or-id> <command>` **does** forward API commands (`agent list`, `pane list`, `agent prompt`) to a saved SSH machine (`herdr --skill`, "To control a saved SSH machine"). The third-sweep note that the CLI stays strictly server-scoped is outdated for the CLI. It remains true that IDs (`w1:p1`) and agent names are per-server, that there is no merged inventory, and that `machine list` is a profile list. `herdr machine list --json` on Daystrom returns `[]`: no machines are saved yet. Whether `events.subscribe` works through `--machine` forwarding is untested (no profile). Ops design is unchanged: one socket per host, merge locally.
+- `herdr --machine <label-or-id> <command>` **does** forward API commands (`agent list`, `pane list`, `agent prompt`) to a saved SSH machine (`herdr --skill`, "To control a saved SSH machine"). The third-sweep note that the CLI stays strictly server-scoped is outdated for the CLI. It remains true that IDs (`w1:p1`) and agent names are per-server, that there is no merged inventory, and that `machine list` is a profile list. `herdr machine list --json` on Studio returns `[]`: no machines are saved yet. Whether `events.subscribe` works through `--machine` forwarding is untested (no profile). Ops design is unchanged: one socket per host, merge locally.
 - Handoff says Elgato SDK v2. Current `@elgato/streamdeck` on npm is 3.0.2; Vik approved v3 on 2026-10-18 and `packages/plugin` pins 3.0.2.
 
 ## Wire format
@@ -118,7 +118,7 @@ Key frames verbatim:
 ```
 
 ```json
-{"data":{"pane":{"agent_status":"unknown","cwd":"/Users/vikgamov/projects/lcars","focused":false,"foreground_cwd":"/Users/vikgamov/projects/lcars","pane_id":"w9:p2","revision":0,"scroll":{"max_offset_from_bottom":0,"offset_from_bottom":0,"viewport_rows":37},"tab_id":"w9:t1","terminal_id":"term_65e1eb7e7612916","workspace_id":"w9"},"type":"pane_created"},"event":"pane_created"}
+{"data":{"pane":{"agent_status":"unknown","cwd":"/Users/me/projects/lcars","focused":false,"foreground_cwd":"/Users/me/projects/lcars","pane_id":"w9:p2","revision":0,"scroll":{"max_offset_from_bottom":0,"offset_from_bottom":0,"viewport_rows":37},"tab_id":"w9:t1","terminal_id":"term_65e1eb7e7612916","workspace_id":"w9"},"type":"pane_created"},"event":"pane_created"}
 {"data":{"agent":"lcars-test","pane_id":"w9:p2","type":"pane_agent_detected","workspace_id":"w9"},"event":"pane_agent_detected"}
 {"data":{"agent":"lcars-test","final_status":"unknown","pane_id":"w9:p2","released":true,"type":"pane_agent_detected","workspace_id":"w9"},"event":"pane_agent_detected"}
 {"data":{"pane_id":"w9:p2","type":"pane_closed","workspace_id":"w9"},"event":"pane_closed"}
@@ -134,26 +134,26 @@ Fixture caveat: `lcars-test` was a reported agent with no real process behind it
 Live AgentInfo sample (from `herdr agent list`, this session's pane while working):
 
 ```json
-{"agent":"claude","agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"4827ac7d-2a1c-40c5-ae52-710fe42318c0"},"agent_status":"working","cwd":"/Users/vikgamov/projects/lcars","focused":true,"foreground_cwd":"/Users/vikgamov/projects/lcars","pane_id":"w9:p1","revision":5,"state_change_seq":4672,"tab_id":"w9:t1","terminal_id":"term_65e1ea01c6a2915","terminal_title":"◑ Coding policy plugin from Tessl","terminal_title_stripped":"Coding policy plugin from Tessl","tokens":{"model":"fable-5-1","summary":"[Request interrupted by user]"},"workspace_id":"w9"}
+{"agent":"claude","agent_session":{"agent":"claude","kind":"id","source":"herdr:claude","value":"4827ac7d-2a1c-40c5-ae52-710fe42318c0"},"agent_status":"working","cwd":"/Users/me/projects/lcars","focused":true,"foreground_cwd":"/Users/me/projects/lcars","pane_id":"w9:p1","revision":5,"state_change_seq":4672,"tab_id":"w9:t1","terminal_id":"term_65e1ea01c6a2915","terminal_title":"◑ Coding policy plugin from Tessl","terminal_title_stripped":"Coding policy plugin from Tessl","tokens":{"model":"fable-5-1","summary":"[Request interrupted by user]"},"workspace_id":"w9"}
 ```
 
 ## CLI surface (for reference, not for polling)
 
 `herdr agent {list,get,read,send-keys,prompt,rename,focus,wait,attach,start,explain}`, `herdr pane {list,current,get,layout,process-info,neighbor,edges,focus,resize,zoom,read,rename,input,split,swap,move,close,send-text,send-keys,wait-output,run,report-agent,report-agent-session,release-agent,report-metadata}`, `herdr api {snapshot,schema}`, `herdr machine {list,status,reconnect,add,rename,remove,enable,disable}`, `herdr status`. CLI server errors are JSON on stderr with exit 1; syntax errors exit 2. Set `HERDR_ENV=1` inside managed panes; `HERDR_PANE_ID`, `HERDR_WORKSPACE_ID`, `HERDR_TAB_ID` are injected.
 
-## Remote host: DS9 (recorded 2026-10-18)
+## Remote host: Mini (recorded 2026-10-18)
 
-- Reached via the ssh alias `ds9` (Tailscale 100.124.8.59); `ds9.local` has no route from Daystrom. Keys live in 1Password's agent, so a non-interactive process cannot authenticate on its own. Vik opened a shared master once with `ssh -fNM -o ControlPath=~/.ssh/cm-ds9 -o ControlPersist=8h ds9`; every later `ssh -o ControlPath=~/.ssh/cm-ds9 ds9 …` rides it with no prompt. Ops will use the same pattern (Vik: "1password controls"; no dedicated passphrase-less key).
-- DS9 runs `herdr 0.9.0`, server protocol 22, socket `/Users/vikgamov/.config/herdr/herdr.sock`. Daystrom is on 0.9.4. Both speak protocol 22; the 0.9.0 `pong` lacks the `ssh_agent_registration` capability flag (five flags instead of six). Ops must treat capability flags as optional booleans.
-- Unix-socket forwarding works: `ssh -o ControlPath=~/.ssh/cm-ds9 -O forward -L <local.sock>:/Users/vikgamov/.config/herdr/herdr.sock ds9`, then plain NDJSON on `<local.sock>`. The local socket path must be short (macOS `sun_path` limit is 104 bytes; a 117-byte path was rejected with `Bad local forwarding specification`). `-O cancel -L …` tears it down.
+- Reached via the ssh alias `mini` (Tailscale <tailscale-ip>); `mini.local` has no route from Studio. Keys live in 1Password's agent, so a non-interactive process cannot authenticate on its own. Vik opened a shared master once with `ssh -fNM -o ControlPath=~/.ssh/cm-mini -o ControlPersist=8h mini`; every later `ssh -o ControlPath=~/.ssh/cm-mini mini …` rides it with no prompt. Ops will use the same pattern (Vik: "1password controls"; no dedicated passphrase-less key).
+- Mini runs `herdr 0.9.0`, server protocol 22, socket `/Users/me/.config/herdr/herdr.sock`. Studio is on 0.9.4. Both speak protocol 22; the 0.9.0 `pong` lacks the `ssh_agent_registration` capability flag (five flags instead of six). Ops must treat capability flags as optional booleans.
+- Unix-socket forwarding works: `ssh -o ControlPath=~/.ssh/cm-mini -O forward -L <local.sock>:/Users/me/.config/herdr/herdr.sock mini`, then plain NDJSON on `<local.sock>`. The local socket path must be short (macOS `sun_path` limit is 104 bytes; a 117-byte path was rejected with `Bad local forwarding specification`). `-O cancel -L …` tears it down.
 - Through the forward: `ping` → pong 0.9.0; `agent.list` → one agent (`w7:p1`, claude, idle, "claude-watch local setup"); `pane.list` → `w7:p1`, `w7:p2`; `events.subscribe` with `pane.created`, `pane.closed` and one `pane.agent_status_changed` per pane → `subscription_started`, connection held open.
 
 ```json
-{"id":"ops:ds9:1","result":{"type":"pong","version":"0.9.0","protocol":22,"capabilities":{"live_handoff":true,"detached_server_daemon":true,"endpoint_protocol_generation":1,"surface_interest":true,"health_check":true}}}
+{"id":"ops:mini:1","result":{"type":"pong","version":"0.9.0","protocol":22,"capabilities":{"live_handoff":true,"detached_server_daemon":true,"endpoint_protocol_generation":1,"surface_interest":true,"health_check":true}}}
 ```
 
 ## Open items for milestone 2
 
-- Arch Mini deferred (Vik, 2026-10-18). Voyager (`uss-voyager` on the tailnet) runs its own Ops in travel mode; no inbound connection planned. Whether `--machine` forwarding carries `events.subscribe` is still untested and no longer needed.
+- Arch Mini deferred (Vik, 2026-10-18). Laptop (`laptop` on the tailnet) runs its own Ops in travel mode; no inbound connection planned. Whether `--machine` forwarding carries `events.subscribe` is still untested and no longer needed.
 - Confirm whether `herdr-compat` builds standalone outside the herdr-web workspace (it pulls `ratatui`, `crossterm`, `interprocess`; heavier than Ops needs). Option: depend on it by git path for schema types only, or vendor just `api/schema/*` + `api/client.rs`.
 - Observe real `blocked` payloads from Claude Code and Codex approval dialogs (`state_labels`, `display_agent`, `title`) — the fixtures above have none because the test agent was synthetic.

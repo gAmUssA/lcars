@@ -169,8 +169,8 @@ mod tests {
         let config = parse(DEFAULT_CONFIG).expect("example config must parse");
         assert_eq!(config.listen, "127.0.0.1:7677");
         assert_eq!(config.hosts.len(), 2);
-        assert_eq!(config.hosts[0].name, "daystrom");
-        assert_eq!(config.hosts[1].ssh.as_deref(), Some("ds9"));
+        assert_eq!(config.hosts[0].name, "studio");
+        assert_eq!(config.hosts[1].ssh.as_deref(), Some("mini"));
     }
 
     #[test]
@@ -242,9 +242,9 @@ mod tests {
     #[test]
     fn ssh_host_transport_defaults_control_path_from_alias() {
         let host = HostConfig {
-            name: "ds9".into(),
+            name: "mini".into(),
             socket: None,
-            ssh: Some("ds9".into()),
+            ssh: Some("mini".into()),
             remote_socket: Some("/Users/v/.config/herdr/herdr.sock".into()),
             control_path: None,
         };
@@ -256,9 +256,9 @@ mod tests {
                 local_socket,
                 ..
             } => {
-                assert_eq!(alias, "ds9");
-                assert_eq!(control_path, expand_tilde("~/.ssh/cm-ds9"));
-                assert_eq!(local_socket, PathBuf::from("/tmp/ops-state/ds9.sock"));
+                assert_eq!(alias, "mini");
+                assert_eq!(control_path, expand_tilde("~/.ssh/cm-mini"));
+                assert_eq!(local_socket, PathBuf::from("/tmp/ops-state/mini.sock"));
             }
             other => panic!("expected ssh transport, got {other:?}"),
         }

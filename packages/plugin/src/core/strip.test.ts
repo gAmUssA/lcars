@@ -20,8 +20,8 @@ const online = { connected: true, version: null, protocol: null, error: null, up
 const fleet: StripScene = {
   mode: "fleet",
   hosts: [
-    { host: { name: "daystrom", ...online }, name: "daystrom", counts: { blocked: 1, done: 0, working: 2, idle: 3, unknown: 0 }, worst: "blocked" },
-    { host: { name: "ds9", ...online, connected: false }, name: "ds9", counts: { blocked: 0, done: 0, working: 0, idle: 0, unknown: 0 }, worst: null },
+    { host: { name: "studio", ...online }, name: "studio", counts: { blocked: 1, done: 0, working: 2, idle: 3, unknown: 0 }, worst: "blocked" },
+    { host: { name: "mini", ...online, connected: false }, name: "mini", counts: { blocked: 0, done: 0, working: 0, idle: 0, unknown: 0 }, worst: null },
   ],
   hostFilter: null,
   page: 0,
@@ -44,10 +44,10 @@ test("each segment is a 200px slice of the same 800px scene", () => {
 
 test("fleet bar colours a host by its worst state and marks offline hosts", () => {
   const svg = decode(renderStripSegment(fleet, 0));
-  expect(svg).toContain(">DAYSTROM<");
+  expect(svg).toContain(">STUDIO<");
   expect(svg).toContain("#D13438"); // blocked colour
   expect(svg).toContain("1 blocked · 2 working");
-  expect(svg).toContain(">DS9<");
+  expect(svg).toContain(">Mini<");
   expect(svg).toContain(">offline<");
 });
 
@@ -60,26 +60,26 @@ test("fleet bar fills spare segments with page and effort read-outs", () => {
 });
 
 test("selected host gets a border and tapping it clears the filter", () => {
-  const filtered = { ...fleet, hostFilter: "ds9" };
+  const filtered = { ...fleet, hostFilter: "mini" };
   expect(decode(renderStripSegment(filtered, 1))).toContain('stroke="#fff"');
   expect(stripTap(filtered, 1, 50)).toEqual({ kind: "clear-filter" });
-  expect(stripTap(filtered, 0, 50)).toEqual({ kind: "host", host: "daystrom" });
+  expect(stripTap(filtered, 0, 50)).toEqual({ kind: "host", host: "studio" });
   expect(stripTap(filtered, 3, 50)).toEqual({ kind: "none" });
 });
 
 test("ticker shows the current blocked agent and tapping focuses it", () => {
   const blocked = [
-    s("daystrom/w1:p2", { state: "blocked", name: "cue-judge", title: "Judge brief for notch-r2" }),
-    s("ds9/w7:p1", { state: "blocked" }),
+    s("studio/w1:p2", { state: "blocked", name: "cue-judge", title: "Judge brief for notch-r2" }),
+    s("mini/w7:p1", { state: "blocked" }),
   ];
   const ticker: StripScene = { ...fleet, mode: "ticker", blocked, tickerIndex: 1 };
   const svg = decode(renderStripSegment(ticker, 0));
   expect(svg).toContain(">BLOCKED<");
   expect(svg).toContain(">2 of 2<");
-  expect(svg).toContain("CLAUDE on DS9");
-  expect(stripTap(ticker, 2, 10)).toEqual({ kind: "focus", sessionId: "ds9/w7:p1" });
+  expect(svg).toContain("CLAUDE on Mini");
+  expect(stripTap(ticker, 2, 10)).toEqual({ kind: "focus", sessionId: "mini/w7:p1" });
   const first = decode(renderStripSegment({ ...ticker, tickerIndex: 0 }, 1));
-  expect(first).toContain("CUE-JUDGE on DAYSTROM");
+  expect(first).toContain("CUE-JUDGE on STUDIO");
   expect(first).toContain("Judge brief for notch-r2");
 });
 

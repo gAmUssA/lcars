@@ -10,18 +10,18 @@ listen = "127.0.0.1:7677"
 
 # Local host: connect straight to the Herdr socket on this machine.
 [[hosts]]
-name = "daystrom"
+name = "studio"
 socket = "~/.config/herdr/herdr.sock"
 
 # Remote host over SSH. Ops never authenticates itself; it rides an SSH
 # ControlMaster you open after login (1Password owns the keys):
 #
-#   ssh -fNM -o ControlPath=~/.ssh/cm-ds9 -o ControlPersist=8h ds9
+#   ssh -fNM -o ControlPath=~/.ssh/cm-mini -o ControlPersist=8h mini
 #
 # `ssh` is an alias from ~/.ssh/config. `remote_socket` must be absolute; the
 # remote side cannot expand `~`. `control_path` defaults to ~/.ssh/cm-<ssh>.
 [[hosts]]
-name = "ds9"
-ssh = "ds9"
-remote_socket = "/Users/vikgamov/.config/herdr/herdr.sock"
-control_path = "~/.ssh/cm-ds9"
+name = "mini"
+ssh = "mini"
+remote_socket = "/Users/me/.config/herdr/herdr.sock"
+control_path = "~/.ssh/cm-mini"

@@ -25,20 +25,20 @@ test("clockwise ticks scroll toward the bottom, three rows per tick", () => {
 });
 
 test("scene reflects the store: hosts from the full list, blocked from the filtered keys", () => {
-  const store = createFleetStore({ localHost: "daystrom" });
+  const store = createFleetStore({ localHost: "studio" });
   const online = { connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 };
   const view: FleetView = {
-    hosts: [{ name: "daystrom", ...online }, { name: "ds9", ...online }],
-    sessions: [session("ds9/w7:p1", { state: "blocked" }), session("daystrom/w1:p1", { state: "working" })],
+    hosts: [{ name: "studio", ...online }, { name: "mini", ...online }],
+    sessions: [session("mini/w7:p1", { state: "blocked" }), session("studio/w1:p1", { state: "working" })],
   };
   store.setView(view);
-  store.setHostFilter("daystrom");
+  store.setHostFilter("studio");
   store.toggleStripMode();
   const scene = sceneFrom(store);
   expect(scene.mode).toBe("ticker");
-  expect(scene.hosts.map((h) => h.name)).toEqual(["daystrom", "ds9"]);
+  expect(scene.hosts.map((h) => h.name)).toEqual(["studio", "mini"]);
   expect(scene.hosts[1].worst).toBe("blocked"); // unfiltered summary
-  expect(scene.blocked).toEqual([]); // filtered to daystrom, which has none
+  expect(scene.blocked).toEqual([]); // filtered to studio, which has none
   expect(scene.totals.working).toBe(1);
   expect(scene.live).toBe(true);
 });

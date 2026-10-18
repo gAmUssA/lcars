@@ -7,7 +7,7 @@ Stream Deck console for coding agents. Read `docs/HANDOFF.md` before changing ar
 - Project and Stream Deck plugin: LCARS. Repo layout: `packages/ops`, `packages/plugin`.
 - Rust daemon: Ops. Binary `ops`, config `ops.toml`, local socket `ops.sock`.
 - Long-press unblock/approve action: Conn.
-- Hosts: Daystrom (Mac Studio, deck host), DS9 (Mac Mini), Voyager (MacBook, travel), Arch Linux Mini. All on Tailscale MagicDNS.
+- Hosts: Studio (Mac Studio, deck host), Mini (Mac Mini), Laptop (MacBook, travel), Arch Linux Mini. All on Tailscale MagicDNS.
 
 ## Components
 

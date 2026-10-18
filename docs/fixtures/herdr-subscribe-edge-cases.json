@@ -29,7 +29,7 @@
     "--no-focus"
    ],
    "rc": 0,
-   "stdout": "{\"id\":\"cli:pane:split\",\"result\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/Users/vikgamov/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/vikgamov/projects/lcars\",\"pane_id\":\"w9:p3\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1ebb121c4c17\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
+   "stdout": "{\"id\":\"cli:pane:split\",\"result\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"pane_id\":\"w9:p3\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1ebb121c4c17\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
    "stderr": ""
   }
  },
@@ -47,7 +47,7 @@
     "list"
    ],
    "rc": 0,
-   "stdout": "{\"id\":\"cli:pane:list\",\"result\":{\"panes\":[{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"b7e47a76-b08f-4b38-9b2e-58589260770a\"},\"agent_status\":\"idle\",\"cwd\":\"/Users/vikgamov/projects/dotfiles\",\"focused\":false,\"foreground_cwd\":\"/Users/vikgamov/projects/dotfiles\",\"pane_id\":\"w1:p1\",\"revision\":15,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":49},\"tab_id\":\"w1:t1\",\"terminal_id\":\"term_65dbf28aa5a8f1\",\"terminal_title\":\"\u2733 Computer setup\",\"terminal_title_stripped\":\"Computer setup\",\"tokens\":{\"model\":\"opus-5-5\",\"summary\":\"why fz",
+   "stdout": "{\"id\":\"cli:pane:list\",\"result\":{\"panes\":[{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"b7e47a76-b08f-4b38-9b2e-58589260770a\"},\"agent_status\":\"idle\",\"cwd\":\"/Users/me/projects/dotfiles\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/dotfiles\",\"pane_id\":\"w1:p1\",\"revision\":15,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":49},\"tab_id\":\"w1:t1\",\"terminal_id\":\"term_65dbf28aa5a8f1\",\"terminal_title\":\"\u2733 Computer setup\",\"terminal_title_stripped\":\"Computer setup\",\"tokens\":{\"model\":\"opus-5-5\",\"summary\":\"why fz",
    "stderr": ""
   }
  },

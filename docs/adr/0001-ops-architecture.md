@@ -5,7 +5,7 @@
 
 ## Context
 
-LCARS needs one view of every coding agent across Daystrom, DS9 and later hosts, on a Stream Deck. Herdr owns the agents, but its socket API is server-scoped: IDs and subscriptions belong to one server, and a status subscription needs an explicit `pane_id` (see `docs/herdr-api.md`). Existing Herdr deck plugins poll the CLI every few seconds against one host.
+LCARS needs one view of every coding agent across Studio, Mini and later hosts, on a Stream Deck. Herdr owns the agents, but its socket API is server-scoped: IDs and subscriptions belong to one server, and a status subscription needs an explicit `pane_id` (see `docs/herdr-api.md`). Existing Herdr deck plugins poll the CLI every few seconds against one host.
 
 Options considered for the merge layer:
 

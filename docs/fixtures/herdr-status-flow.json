@@ -29,7 +29,7 @@
     "--no-focus"
    ],
    "rc": 0,
-   "stdout": "{\"id\":\"cli:pane:split\",\"result\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/Users/vikgamov/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/vikgamov/projects/lcars\",\"pane_id\":\"w9:p2\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1eb7e7612916\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
+   "stdout": "{\"id\":\"cli:pane:split\",\"result\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"pane_id\":\"w9:p2\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1eb7e7612916\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
    "stderr": ""
   }
  },
@@ -51,7 +51,7 @@
  {
   "t": 0.622,
   "tag": "C-broad",
-  "frame": "{\"data\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/Users/vikgamov/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/vikgamov/projects/lcars\",\"pane_id\":\"w9:p2\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1eb7e7612916\",\"workspace_id\":\"w9\"},\"type\":\"pane_created\"},\"event\":\"pane_created\"}"
+  "frame": "{\"data\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"pane_id\":\"w9:p2\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1eb7e7612916\",\"workspace_id\":\"w9\"},\"type\":\"pane_created\"},\"event\":\"pane_created\"}"
  },
  {
   "t": 1.061,
@@ -184,7 +184,7 @@
     "w9:p2"
    ],
    "rc": 0,
-   "stdout": "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"agent\":\"lcars-test\",\"agent_status\":\"idle\",\"cwd\":\"/Users/vikgamov/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/vikgamov/projects/lcars\",\"pane_id\":\"w9:p2\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1eb7e7612916\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
+   "stdout": "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"agent\":\"lcars-test\",\"agent_status\":\"idle\",\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"pane_id\":\"w9:p2\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1eb7e7612916\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
    "stderr": ""
   }
  },

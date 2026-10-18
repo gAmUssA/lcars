@@ -214,9 +214,9 @@ mod tests {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
     fn fleet_with_one_blocked_session() -> Fleet {
-        let mut fleet = Fleet::with_hosts(["ds9"], 1_000);
+        let mut fleet = Fleet::with_hosts(["mini"], 1_000);
         fleet.apply(
-            "ds9",
+            "mini",
             HostEvent::Connected {
                 version: "0.9.0".into(),
                 protocol: 22,
@@ -224,7 +224,7 @@ mod tests {
             1_001,
         );
         fleet.apply(
-            "ds9",
+            "mini",
             HostEvent::StatusChanged(PaneAgentStatusChangedEvent {
                 pane_id: "w7:p1".into(),
                 workspace_id: "w7".into(),
@@ -241,9 +241,9 @@ mod tests {
 
     /// Recorded `agent.focus` reply from Herdr 0.9.4 (2026-10-18): the result
     /// is the focused agent's info, not `ok`.
-    const AGENT_FOCUS_REPLY: &str = r#"{"type":"agent_info","agent":{"terminal_id":"term_65e1ea01c6a2915","agent":"claude","terminal_title":"◐ Coding policy plugin from Tessl","terminal_title_stripped":"Coding policy plugin from Tessl","agent_status":"working","tokens":{"model":"fable-5-1"},"agent_session":{"source":"herdr:claude","agent":"claude","kind":"id","value":"4827ac7d-2a1c-40c5-ae52-710fe42318c0"},"workspace_id":"w9","tab_id":"w9:t1","pane_id":"w9:p1","focused":true,"state_change_seq":4696,"cwd":"/Users/vikgamov/projects/lcars","foreground_cwd":"/Users/vikgamov/projects/lcars","revision":9}}"#;
+    const AGENT_FOCUS_REPLY: &str = r#"{"type":"agent_info","agent":{"terminal_id":"term_65e1ea01c6a2915","agent":"claude","terminal_title":"◐ Coding policy plugin from Tessl","terminal_title_stripped":"Coding policy plugin from Tessl","agent_status":"working","tokens":{"model":"fable-5-1"},"agent_session":{"source":"herdr:claude","agent":"claude","kind":"id","value":"4827ac7d-2a1c-40c5-ae52-710fe42318c0"},"workspace_id":"w9","tab_id":"w9:t1","pane_id":"w9:p1","focused":true,"state_change_seq":4696,"cwd":"/Users/me/projects/lcars","foreground_cwd":"/Users/me/projects/lcars","revision":9}}"#;
 
-    /// Fake Herdr for the ds9 host: answers `agent.focus` with the recorded
+    /// Fake Herdr for the mini host: answers `agent.focus` with the recorded
     /// `agent_info` reply, everything else with `ok`, and records the request.
     async fn fake_herdr(
         path: std::path::PathBuf,
@@ -303,7 +303,7 @@ mod tests {
         tokio::spawn(fake_herdr(socket.clone(), seen_tx));
         let mut hosts = std::collections::HashMap::new();
         hosts.insert(
-            "ds9".to_string(),
+            "mini".to_string(),
             crate::herdr::transport::Transport::Local { socket },
         );
         let relay = Arc::new(ActionRelay::new(hosts));
@@ -340,7 +340,7 @@ mod tests {
     async fn focus_action_relays_agent_focus_to_the_owning_host() {
         let mut h = start().await;
         let (status, json) =
-            post_action(h.addr, r#"{"action":"focus","session":"ds9/w7:p1"}"#).await;
+            post_action(h.addr, r#"{"action":"focus","session":"mini/w7:p1"}"#).await;
         assert_eq!(status, 200, "{json}");
         assert_eq!(json["ok"], true);
         let req = h.herdr_requests.recv().await.unwrap();
@@ -353,7 +353,7 @@ mod tests {
         let mut h = start().await;
         let mut fleet = fleet_with_one_blocked_session();
         fleet.apply(
-            "ds9",
+            "mini",
             HostEvent::StatusChanged(PaneAgentStatusChangedEvent {
                 pane_id: "w7:p2".into(),
                 workspace_id: "w7".into(),
@@ -366,7 +366,7 @@ mod tests {
             1_005,
         );
         h.tx.send(Arc::new(FleetView::from_fleet(&fleet))).unwrap();
-        let (status, _) = post_action(h.addr, r#"{"action":"focus","session":"ds9/w7:p2"}"#).await;
+        let (status, _) = post_action(h.addr, r#"{"action":"focus","session":"mini/w7:p2"}"#).await;
         assert_eq!(status, 200);
         let req = h.herdr_requests.recv().await.unwrap();
         assert_eq!(req["method"], "pane.focus");
@@ -379,7 +379,7 @@ mod tests {
         // 10 + 3 rows up = 13.
         let (status, json) = post_action(
             h.addr,
-            r#"{"action":"scroll","session":"ds9/w7:p1","delta":3}"#,
+            r#"{"action":"scroll","session":"mini/w7:p1","delta":3}"#,
         )
         .await;
         assert_eq!(status, 200, "{json}");
@@ -395,18 +395,18 @@ mod tests {
         // Past the top clamps to max (40); past the bottom clamps to 0.
         let (_, json) = post_action(
             h.addr,
-            r#"{"action":"scroll","session":"ds9/w7:p1","delta":500}"#,
+            r#"{"action":"scroll","session":"mini/w7:p1","delta":500}"#,
         )
         .await;
         assert_eq!(json["offset_from_bottom"], 40);
         let (_, json) = post_action(
             h.addr,
-            r#"{"action":"scroll","session":"ds9/w7:p1","delta":-500}"#,
+            r#"{"action":"scroll","session":"mini/w7:p1","delta":-500}"#,
         )
         .await;
         assert_eq!(json["offset_from_bottom"], 0);
         let (status, json) =
-            post_action(h.addr, r#"{"action":"scroll","session":"ds9/w7:p1"}"#).await;
+            post_action(h.addr, r#"{"action":"scroll","session":"mini/w7:p1"}"#).await;
         assert_eq!(status, 400);
         assert!(json["error"].as_str().unwrap().contains("delta"));
     }
@@ -416,7 +416,7 @@ mod tests {
         let mut h = start().await;
         let (status, json) = post_action(
             h.addr,
-            r#"{"action":"prompt","session":"ds9/w7:p1","text":"/effort high"}"#,
+            r#"{"action":"prompt","session":"mini/w7:p1","text":"/effort high"}"#,
         )
         .await;
         assert_eq!(status, 200, "{json}");
@@ -426,12 +426,12 @@ mod tests {
         assert_eq!(req["params"]["text"], "/effort high");
         let (status, _) = post_action(
             h.addr,
-            r#"{"action":"prompt","session":"ds9/w7:p1","text":"  "}"#,
+            r#"{"action":"prompt","session":"mini/w7:p1","text":"  "}"#,
         )
         .await;
         assert_eq!(status, 502);
         let (status, json) =
-            post_action(h.addr, r#"{"action":"prompt","session":"ds9/w7:p1"}"#).await;
+            post_action(h.addr, r#"{"action":"prompt","session":"mini/w7:p1"}"#).await;
         assert_eq!(status, 400);
         assert!(json["error"].as_str().unwrap().contains("text"));
     }
@@ -440,11 +440,11 @@ mod tests {
     async fn unknown_session_is_404_and_unknown_action_is_400() {
         let h = start().await;
         let (status, json) =
-            post_action(h.addr, r#"{"action":"focus","session":"ds9/w0:p0"}"#).await;
+            post_action(h.addr, r#"{"action":"focus","session":"mini/w0:p0"}"#).await;
         assert_eq!(status, 404);
-        assert!(json["error"].as_str().unwrap().contains("ds9/w0:p0"));
+        assert!(json["error"].as_str().unwrap().contains("mini/w0:p0"));
         let (status, json) =
-            post_action(h.addr, r#"{"action":"teleport","session":"ds9/w7:p1"}"#).await;
+            post_action(h.addr, r#"{"action":"teleport","session":"mini/w7:p1"}"#).await;
         assert_eq!(status, 400);
         assert!(json["error"].as_str().unwrap().contains("teleport"));
     }
@@ -470,7 +470,7 @@ mod tests {
         assert_eq!(view.hosts.len(), 1);
         assert!(view.hosts[0].connected);
         assert_eq!(view.sessions.len(), 1);
-        assert_eq!(view.sessions[0].id, "ds9/w7:p1");
+        assert_eq!(view.sessions[0].id, "mini/w7:p1");
         assert_eq!(view.sessions[0].state, AgentState::Blocked);
         let json: serde_json::Value = serde_json::from_str(body).unwrap();
         assert_eq!(json["sessions"][0]["state"], "blocked");
@@ -505,7 +505,7 @@ mod tests {
 
         let mut fleet = fleet_with_one_blocked_session();
         fleet.apply(
-            "ds9",
+            "mini",
             HostEvent::PaneClosed {
                 pane_id: "w7:p1".into(),
             },

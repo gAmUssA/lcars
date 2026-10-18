@@ -12,17 +12,17 @@ function session(id: string, agent: string | null, over: Partial<Session> = {}):
 
 const online = { connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 };
 const view: FleetView = {
-  hosts: [{ name: "daystrom", ...online }, { name: "ds9", ...online }],
+  hosts: [{ name: "studio", ...online }, { name: "mini", ...online }],
   sessions: [
-    session("ds9/w7:p1", "claude", { state: "blocked", updated_at_ms: 5 }),
-    session("daystrom/w4:p3", null),
-    session("daystrom/w1:p1", "codex", { focused: true }),
-    session("daystrom/w1:p2", "claude", { state: "blocked", updated_at_ms: 1 }),
+    session("mini/w7:p1", "claude", { state: "blocked", updated_at_ms: 5 }),
+    session("studio/w4:p3", null),
+    session("studio/w1:p1", "codex", { focused: true }),
+    session("studio/w1:p2", "claude", { state: "blocked", updated_at_ms: 1 }),
   ],
 };
 
 test("only panes with an agent get keys, in the order Ops sent", () => {
-  expect(keyedSessions(view).map((s) => s.id)).toEqual(["ds9/w7:p1", "daystrom/w1:p1", "daystrom/w1:p2"]);
+  expect(keyedSessions(view).map((s) => s.id)).toEqual(["mini/w7:p1", "studio/w1:p1", "studio/w1:p2"]);
 });
 
 test("setView makes the store healthy and fills slots", () => {
@@ -32,8 +32,8 @@ test("setView makes the store healthy and fills slots", () => {
   expect(store.sessionAt(0)).toBeNull();
   store.setView(view);
   expect(store.getState().healthy).toBe(true);
-  expect(store.sessionAt(0)?.id).toBe("ds9/w7:p1");
-  expect(store.sessionAt(2)?.id).toBe("daystrom/w1:p2");
+  expect(store.sessionAt(0)?.id).toBe("mini/w7:p1");
+  expect(store.sessionAt(2)?.id).toBe("studio/w1:p2");
   expect(store.sessionAt(3)).toBeNull();
   expect(seen).toEqual([false, true]);
 });
@@ -43,7 +43,7 @@ test("setDown keeps the last keys but flags the store unhealthy", () => {
   store.setView(view);
   store.setDown();
   expect(store.getState().healthy).toBe(false);
-  expect(store.sessionAt(0)?.id).toBe("ds9/w7:p1");
+  expect(store.sessionAt(0)?.id).toBe("mini/w7:p1");
 });
 
 test("setDown before any view emits nothing", () => {
@@ -58,13 +58,13 @@ test("host filter narrows the keys and survives a view update, falls back when t
   const store = createFleetStore();
   store.setView(view);
   store.cycleHostFilter(1);
-  expect(store.getState().ui.hostFilter).toBe("daystrom");
-  expect(store.getState().keys.map((s) => s.id)).toEqual(["daystrom/w1:p1", "daystrom/w1:p2"]);
+  expect(store.getState().ui.hostFilter).toBe("studio");
+  expect(store.getState().keys.map((s) => s.id)).toEqual(["studio/w1:p1", "studio/w1:p2"]);
   store.setView(view);
-  expect(store.getState().ui.hostFilter).toBe("daystrom");
-  store.setHostFilter("ds9");
-  expect(store.sessionAt(0)?.id).toBe("ds9/w7:p1");
-  store.setView({ hosts: [view.hosts[0]], sessions: view.sessions.filter((s) => s.host === "daystrom") });
+  expect(store.getState().ui.hostFilter).toBe("studio");
+  store.setHostFilter("mini");
+  expect(store.sessionAt(0)?.id).toBe("mini/w7:p1");
+  store.setView({ hosts: [view.hosts[0]], sessions: view.sessions.filter((s) => s.host === "studio") });
   expect(store.getState().ui.hostFilter).toBeNull();
   expect(store.allKeys()).toHaveLength(2);
 });
@@ -96,22 +96,22 @@ test("strip mode toggles and the ticker cycles through blocked sessions oldest f
   expect(store.getState().ui.stripMode).toBe("fleet");
   store.toggleStripMode();
   expect(store.getState().ui.stripMode).toBe("ticker");
-  expect(store.tickerSession()?.id).toBe("daystrom/w1:p2");
+  expect(store.tickerSession()?.id).toBe("studio/w1:p2");
   store.moveTicker(1);
-  expect(store.tickerSession()?.id).toBe("ds9/w7:p1");
+  expect(store.tickerSession()?.id).toBe("mini/w7:p1");
   store.moveTicker(1);
-  expect(store.tickerSession()?.id).toBe("daystrom/w1:p2"); // wraps
+  expect(store.tickerSession()?.id).toBe("studio/w1:p2"); // wraps
   store.moveTicker(-1);
-  expect(store.tickerSession()?.id).toBe("ds9/w7:p1");
+  expect(store.tickerSession()?.id).toBe("mini/w7:p1");
 });
 
 test("effort level is tracked and the focused session prefers the local host", () => {
-  const store = createFleetStore({ localHost: "daystrom" });
+  const store = createFleetStore({ localHost: "studio" });
   store.setView(view);
   expect(store.getState().ui.effort).toBe("high");
   store.cycleEffortLevel(1);
   expect(store.getState().ui.effort).toBe("xhigh");
   store.setEffort("low");
   expect(store.getState().ui.effort).toBe("low");
-  expect(store.focusedSession()?.id).toBe("daystrom/w1:p1");
+  expect(store.focusedSession()?.id).toBe("studio/w1:p1");
 });

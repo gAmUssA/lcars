@@ -4,7 +4,7 @@ Oct 18, 2026 · @Viktor Gamov
 
 ## Goal and context
 
-**Naming (Star Trek, matching Vik's hosts Daystrom = Mac Studio, DS9 = Mac Mini, Voyager = MacBook):** the project and Stream Deck plugin are **LCARS**; the Rust bridge daemon is **Ops** (`ops` binary, `ops.toml` config, `ops.sock`); the long-press unblock/approve action is **Conn** ("take the conn"). Repo: `lcars/` with `packages/ops` and `packages/plugin`.
+**Naming (Star Trek, matching Vik's hosts Studio = Mac Studio, Mini = Mac Mini, Laptop = MacBook):** the project and Stream Deck plugin are **LCARS**; the Rust bridge daemon is **Ops** (`ops` binary, `ops.toml` config, `ops.sock`); the long-press unblock/approve action is **Conn** ("take the conn"). Repo: `lcars/` with `packages/ops` and `packages/plugin`.
 
 Build a Stream Deck plugin (macOS, Node/TypeScript, Elgato SDK v2) that turns Vik's three idle Stream Decks into a control surface for his coding agents, with Herdr as the primary backend and Claude Code hooks as a secondary signal. Ship it as an installable `.streamDeckPlugin` and integrate it into the daily workflow.
 

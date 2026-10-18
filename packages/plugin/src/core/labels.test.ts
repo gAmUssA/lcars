@@ -4,8 +4,8 @@ import type { FleetView, Session } from "../ops/types";
 
 function session(over: Partial<Session>): Session {
   return {
-    id: "daystrom/w1:p1",
-    host: "daystrom",
+    id: "studio/w1:p1",
+    host: "studio",
     workspace_id: "w1",
     tab_id: "w1:t1",
     pane_id: "w1:p1",
@@ -13,7 +13,7 @@ function session(over: Partial<Session>): Session {
     name: null,
     state: "idle",
     title: "Computer setup",
-    cwd: "/Users/vikgamov/projects/dotfiles",
+    cwd: "/Users/me/projects/dotfiles",
     model: null,
     summary: null,
     focused: false,
@@ -35,9 +35,9 @@ test("title mode falls back to the project folder when the title is empty", () =
 });
 
 test("project mode numbers panes that share a folder, across hosts", () => {
-  const a = session({ id: "daystrom/w1:p1", pane_id: "w1:p1" });
-  const b = session({ id: "daystrom/w1:p2", pane_id: "w1:p2" });
-  const c = session({ id: "ds9/w7:p1", host: "ds9", pane_id: "w7:p1" });
+  const a = session({ id: "studio/w1:p1", pane_id: "w1:p1" });
+  const b = session({ id: "studio/w1:p2", pane_id: "w1:p2" });
+  const c = session({ id: "mini/w7:p1", host: "mini", pane_id: "w7:p1" });
   const peers = [c, b, a];
   expect(labelFor(a, peers, "project")).toBe("dotfiles #1");
   expect(labelFor(b, peers, "project")).toBe("dotfiles #2");
@@ -50,16 +50,16 @@ test("project mode without a cwd falls back to the agent kind", () => {
 });
 
 test("host tag only shows for a multi-host fleet", () => {
-  const one: FleetView = { hosts: [{ name: "daystrom", connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 }], sessions: [] };
+  const one: FleetView = { hosts: [{ name: "studio", connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 }], sessions: [] };
   expect(hostTag(session({}), one)).toBeNull();
   const two: FleetView = {
     hosts: [
       ...one.hosts,
-      { name: "ds9", connected: false, version: null, protocol: null, error: null, updated_at_ms: 0 },
+      { name: "mini", connected: false, version: null, protocol: null, error: null, updated_at_ms: 0 },
     ],
     sessions: [],
   };
-  expect(hostTag(session({}), two)).toBe("DAYS");
-  expect(hostTag(session({ host: "ds9" }), two)).toBe("DS9");
+  expect(hostTag(session({}), two)).toBe("STUD");
+  expect(hostTag(session({ host: "mini" }), two)).toBe("Mini");
   expect(hostTag(session({}), null)).toBeNull();
 });
