@@ -24,7 +24,7 @@ Stream Deck XL, agent wall page: one key per agent across both hosts (host tag t
 | 3. Plugin v0: Inbox Key on the Stream Deck +, tap focuses the pane | done |
 | 4. Plus dials and touch strip | done |
 | 5. Conn (long-press confirm), done ping | done; Claude Code hooks pending a yes |
-| 6. Remote keys and travel profile | planned |
+| 6. Remote and global keys | done on the XL; travel profile waits for the small deck |
 | 7. XL status wall | agent wall done, global row and third-party rows planned |
 | 8. Packaging, launchd, install | planned |
 
@@ -80,6 +80,17 @@ One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most rec
 
 - **Conn** is a long press (400 ms or more) on an Inbox Key whose agent is `blocked`: Ops presses Enter in that pane, which confirms whatever the agent's dialog has highlighted. A short tap never does this; a long press on a non-blocked key only blinks.
 - **Done ping**: when an agent enters `blocked` or finishes a turn (`working` → `idle`), its key blinks and a system sound plays (Ping for blocked, Glass for done). The first view after a reconnect only primes the baseline. Mute with the **Bell** setting on any Inbox Key.
+
+### Global keys
+
+| Key | Press |
+| --- | --- |
+| Attach | opens an iTerm2 window running `herdr` locally, `ssh -t <alias> herdr`, `mosh <alias> -- herdr` or `ssh -t <alias> tmux attach` (host and mode per key) |
+| Stop All | first press arms (SURE? with the busy count, 4 s); second press sends Escape to every working or blocked agent through Ops |
+| Dictate | raises iTerm2 and clicks Edit › Start Dictation |
+| Mute Bell | toggles the done-ping sound |
+
+macOS asks once for Automation consent ("Stream Deck wants access to control iTerm" and "System Events") the first time Attach, Dictate or a focusing tap runs. Until you click Allow those keys show an alert.
 
 ### Dials and touch strip (Stream Deck +)
 

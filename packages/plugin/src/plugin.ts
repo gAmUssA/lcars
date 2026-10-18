@@ -4,7 +4,9 @@
 import os from "node:os";
 import streamDeck from "@elgato/streamdeck";
 import { createDials } from "./actions/dials";
+import { AttachAction, DictateAction, MuteBellAction, StopAllAction } from "./actions/global-keys";
 import { InboxKeyAction } from "./actions/inbox-key";
+import { createOsa } from "./os/iterm";
 import { createFleetStore } from "./core/store";
 import { detectFlips } from "./core/transitions";
 import { createBell } from "./os/bell";
@@ -37,6 +39,17 @@ const bell = createBell({ enabled: () => bellEnabled });
 const terminal = createTerminalActivator({ app: process.env.LCARS_TERMINAL_APP });
 const inbox = new InboxKeyAction(store, ops, terminal);
 const dials = createDials({ store, ops, terminal });
+const osa = createOsa();
+const stopAll = new StopAllAction(store, ops);
+const muteBell = new MuteBellAction({
+  isOn: () => bellEnabled,
+  set: async (on) => {
+    const current = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+    await streamDeck.settings.setGlobalSettings<GlobalSettings>({ ...current, bell: on ? "on" : "off" });
+    bellEnabled = on;
+  },
+});
+const globals = [new AttachAction(osa), stopAll, new DictateAction(osa), muteBell];
 
 // Done ping: compare consecutive healthy views. The first view after a
 // (re)connect only primes the baseline, so a reconnect never pings for
@@ -45,6 +58,7 @@ let previous: Session[] | null = null;
 store.subscribe((state) => {
   inbox.renderAll();
   for (const dial of dials) dial.renderAll();
+  stopAll.renderAll();
   if (!state.healthy) {
     previous = null;
     return;
@@ -62,6 +76,7 @@ store.subscribe((state) => {
 
 const applyConnection = (settings: GlobalSettings): void => {
   bellEnabled = settings.bell !== "off";
+  muteBell.renderAll();
   const url = settings.opsUrl?.trim() || DEFAULT_OPS_URL;
   if (client && url === opsUrl) return;
   opsUrl = url;
@@ -82,6 +97,7 @@ const applyConnection = (settings: GlobalSettings): void => {
 streamDeck.settings.onDidReceiveGlobalSettings<GlobalSettings>((ev) => applyConnection(ev.settings));
 streamDeck.actions.registerAction(inbox);
 for (const dial of dials) streamDeck.actions.registerAction(dial);
+for (const key of globals) streamDeck.actions.registerAction(key);
 
 await streamDeck.connect();
 streamDeck.logger.info(`lcars plugin up on ${localHost}`);

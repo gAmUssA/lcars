@@ -132,6 +132,17 @@ const LABEL_LINE_HEIGHT = 22;
 /** First title baseline, just under the logo; lines hang from here. */
 const LABEL_FIRST_BASELINE = 84;
 
+/** A plain utility key: big title, small subtitle, flat colour. */
+export function renderLabelKey(view: { title: string; subtitle: string; color: string }): string {
+  return toDataUri(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144">` +
+      `<rect width="144" height="144" rx="16" fill="${view.color}"/>` +
+      `<text x="72" y="70" font-family="sans-serif" font-size="28" font-weight="bold" fill="#fff" text-anchor="middle">${escapeXml(view.title)}</text>` +
+      `<text x="72" y="104" font-family="sans-serif" font-size="17" fill="#fff" fill-opacity="0.85" text-anchor="middle">${escapeXml(view.subtitle)}</text>` +
+      `</svg>`,
+  );
+}
+
 export function renderKeySvg(view: KeyView | null): string {
   if (!view) return renderEmptySvg();
   const { color, glyph } = presentation(view.status);

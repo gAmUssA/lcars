@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
   "Name": "LCARS",
-  "Version": "0.2.0.0",
+  "Version": "0.3.0.0",
   "Author": "Viktor Gamov",
   "Description": "Herdr coding agents across every host on your Stream Deck, fed by the Ops daemon.",
   "Category": "LCARS",
@@ -31,7 +31,9 @@
       "Icon": "imgs/actions/inbox/icon",
       "Tooltip": "One Herdr agent pane (by slot). Colour is its state; tap focuses the pane.",
       "PropertyInspectorPath": "ui/inbox-key.html",
-      "Controllers": ["Keypad"],
+      "Controllers": [
+        "Keypad"
+      ],
       "States": [
         {
           "Image": "imgs/actions/inbox/key",
@@ -44,7 +46,9 @@
       "UUID": "io.gamov.lcars.dial.scroll",
       "Icon": "imgs/actions/dial-scroll/icon",
       "Tooltip": "Pages the Inbox Keys when there are more agents than keys. Press returns to page 1.",
-      "Controllers": ["Encoder"],
+      "Controllers": [
+        "Encoder"
+      ],
       "Encoder": {
         "layout": "layouts/strip.json",
         "StackColor": "#F0A030",
@@ -54,14 +58,20 @@
           "Touch": "Filter by host"
         }
       },
-      "States": [{ "Image": "imgs/actions/dial-scroll/icon" }]
+      "States": [
+        {
+          "Image": "imgs/actions/dial-scroll/icon"
+        }
+      ]
     },
     {
       "Name": "Machine Dial",
       "UUID": "io.gamov.lcars.dial.machine",
       "Icon": "imgs/actions/dial-machine/icon",
       "Tooltip": "Cycles the host filter: all hosts, then each host in turn. Press shows all hosts.",
-      "Controllers": ["Encoder"],
+      "Controllers": [
+        "Encoder"
+      ],
       "Encoder": {
         "layout": "layouts/strip.json",
         "StackColor": "#9A7BD0",
@@ -71,14 +81,20 @@
           "Touch": "Filter by host"
         }
       },
-      "States": [{ "Image": "imgs/actions/dial-machine/icon" }]
+      "States": [
+        {
+          "Image": "imgs/actions/dial-machine/icon"
+        }
+      ]
     },
     {
       "Name": "Effort Dial",
       "UUID": "io.gamov.lcars.dial.effort",
       "Icon": "imgs/actions/dial-effort/icon",
       "Tooltip": "Picks a Claude Code reasoning effort; press sends /effort <level> to the focused Claude pane.",
-      "Controllers": ["Encoder"],
+      "Controllers": [
+        "Encoder"
+      ],
       "Encoder": {
         "layout": "layouts/strip.json",
         "StackColor": "#5AA0E0",
@@ -88,14 +104,20 @@
           "Touch": "Filter by host"
         }
       },
-      "States": [{ "Image": "imgs/actions/dial-effort/icon" }]
+      "States": [
+        {
+          "Image": "imgs/actions/dial-effort/icon"
+        }
+      ]
     },
     {
       "Name": "Pane Dial",
       "UUID": "io.gamov.lcars.dial.pane",
       "Icon": "imgs/actions/dial-pane/icon",
       "Tooltip": "Scrolls the focused pane's terminal. Press toggles the strip between the fleet bar and the inbox ticker; in ticker mode the dial cycles blocked agents.",
-      "Controllers": ["Encoder"],
+      "Controllers": [
+        "Encoder"
+      ],
       "Encoder": {
         "layout": "layouts/strip.json",
         "StackColor": "#D13438",
@@ -105,7 +127,72 @@
           "Touch": "Focus the blocked agent"
         }
       },
-      "States": [{ "Image": "imgs/actions/dial-pane/icon" }]
+      "States": [
+        {
+          "Image": "imgs/actions/dial-pane/icon"
+        }
+      ]
+    },
+    {
+      "Name": "Attach",
+      "UUID": "io.gamov.lcars.attach",
+      "Icon": "imgs/actions/attach/icon",
+      "Tooltip": "Opens an iTerm2 window attached to a host's Herdr (ssh, mosh, or tmux).",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/attach/icon",
+          "TitleAlignment": "bottom"
+        }
+      ],
+      "PropertyInspectorPath": "ui/attach.html"
+    },
+    {
+      "Name": "Stop All",
+      "UUID": "io.gamov.lcars.stop-all",
+      "Icon": "imgs/actions/stop-all/icon",
+      "Tooltip": "Press twice within 4 s to send Escape to every working or blocked agent.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/stop-all/icon",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Dictate",
+      "UUID": "io.gamov.lcars.dictate",
+      "Icon": "imgs/actions/dictate/icon",
+      "Tooltip": "Raises iTerm2 and starts macOS dictation.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/dictate/icon",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Mute Bell",
+      "UUID": "io.gamov.lcars.mute-bell",
+      "Icon": "imgs/actions/mute-bell/icon",
+      "Tooltip": "Toggles the done-ping sound.",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/mute-bell/icon",
+          "TitleAlignment": "bottom"
+        }
+      ]
     }
   ]
 }
