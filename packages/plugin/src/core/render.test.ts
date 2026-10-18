@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { LABEL_CHARS_PER_LINE, LABEL_FONT_PX, renderEmptySvg, renderKeySvg, renderOfflineSvg, wrapLabel } from "./render";
+import { BADGE_SIZE, LABEL_CHARS_PER_LINE, LABEL_FONT_PX, renderEmptySvg, renderKeySvg, renderOfflineSvg, wrapLabel } from "./render";
 
 function decode(uri: string): string {
   expect(uri.startsWith("data:image/svg+xml,")).toBe(true);
@@ -26,13 +26,23 @@ test("wraps at word boundaries, splits only over-long words, ellipsises overflow
   expect(wrapLabel("", 8, 3)).toEqual([""]);
 });
 
-test("known agent gets a logo badge, unknown agent a two-letter code", () => {
-  const claude = decode(renderKeySvg(base));
-  expect(claude).toContain("<g transform");
-  const grok = decode(renderKeySvg({ ...base, agent: "grok" }));
-  expect(grok).toContain(">GK<");
+test("known agents get a centred logo, unknown agents a two-letter code", () => {
+  for (const agent of ["claude", "codex", "grok"]) {
+    const svg = decode(renderKeySvg({ ...base, agent }));
+    expect(svg, agent).toContain(`translate(${(144 - BADGE_SIZE) / 2} 10)`);
+    expect(svg, agent).not.toMatch(/>[A-Z]{2}</);
+  }
+  expect(BADGE_SIZE).toBe(46);
   const other = decode(renderKeySvg({ ...base, agent: "zephyr" }));
   expect(other).toContain(">ZE<");
+  expect(other).toContain('x="72"');
+});
+
+test("status glyph sits in the top-left corner, title under the logo", () => {
+  const svg = decode(renderKeySvg({ ...base, status: "blocked", label: "Computer setup" }));
+  expect(svg).toContain('<text x="10" y="26" font-family="sans-serif" font-size="20" fill="#fff" text-anchor="start">▲</text>');
+  expect(svg).toContain('y="84"');
+  expect(svg).toContain('y="106"');
 });
 
 test("host tag appears only when given", () => {

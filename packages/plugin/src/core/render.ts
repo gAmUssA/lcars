@@ -87,23 +87,23 @@ function agentCode(name: string): string {
   return AGENT_CODE[name.toLowerCase()] ?? name.slice(0, 2).toUpperCase();
 }
 
-const BADGE_X = 8;
-const BADGE_Y = 8;
-const BADGE_SIZE = 30;
+// Agent-type logo, centred in the upper half of the key: a monochrome logo
+// when one exists, otherwise the 2-letter code. The title sits beneath it.
+export const BADGE_SIZE = 46;
+const BADGE_Y = 10;
 
-// Agent-type badge in the top-left corner: a monochrome logo when one exists,
-// otherwise the 2-letter code.
 function agentBadge(name: string): string {
   const icon = AGENT_ICON[name.toLowerCase()];
+  const x = (144 - BADGE_SIZE) / 2;
   if (icon) {
     const [minX, minY, w, h] = icon.vb.split(/\s+/).map(Number);
     const scale = BADGE_SIZE / Math.max(w, h);
-    const transform = `translate(${BADGE_X} ${BADGE_Y}) scale(${scale}) translate(${-minX} ${-minY})`;
-    return `<g transform="${transform}" fill="#ffffff" fill-opacity="0.85" fill-rule="evenodd">${icon.body}</g>`;
+    const transform = `translate(${x} ${BADGE_Y}) scale(${scale}) translate(${-minX} ${-minY})`;
+    return `<g transform="${transform}" fill="#ffffff" fill-opacity="0.95" fill-rule="evenodd">${icon.body}</g>`;
   }
   return (
-    `<text x="10" y="28" font-family="sans-serif" font-size="18" font-weight="bold" ` +
-    `fill="#ffffff" fill-opacity="0.75" text-anchor="start">${escapeXml(agentCode(name))}</text>`
+    `<text x="72" y="${BADGE_Y + 36}" font-family="sans-serif" font-size="34" font-weight="bold" ` +
+    `fill="#ffffff" fill-opacity="0.9" text-anchor="middle">${escapeXml(agentCode(name))}</text>`
   );
 }
 
@@ -129,13 +129,14 @@ export const LABEL_CHARS_PER_LINE = 11;
 export const LABEL_LINES = 3;
 export const LABEL_FONT_PX = 19;
 const LABEL_LINE_HEIGHT = 22;
-const LABEL_LAST_BASELINE = 130;
+/** First title baseline, just under the logo; lines hang from here. */
+const LABEL_FIRST_BASELINE = 84;
 
 export function renderKeySvg(view: KeyView | null): string {
   if (!view) return renderEmptySvg();
   const { color, glyph } = presentation(view.status);
   const lines = wrapLabel(view.label, LABEL_CHARS_PER_LINE, LABEL_LINES);
-  const firstY = LABEL_LAST_BASELINE - (lines.length - 1) * LABEL_LINE_HEIGHT;
+  const firstY = LABEL_FIRST_BASELINE;
   const labelSvg = lines
     .map((line, i) => {
       const y = firstY + i * LABEL_LINE_HEIGHT;
@@ -150,7 +151,7 @@ export function renderKeySvg(view: KeyView | null): string {
   return toDataUri(
     `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144">` +
       `<rect width="144" height="144" rx="16" fill="${color}"/>` +
-      `<text x="72" y="34" font-family="sans-serif" font-size="24" fill="#fff" text-anchor="middle">${glyph}</text>` +
+      `<text x="10" y="26" font-family="sans-serif" font-size="20" fill="#fff" text-anchor="start">${glyph}</text>` +
       agentBadge(view.agent) +
       host +
       labelSvg +
