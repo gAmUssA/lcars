@@ -93,7 +93,7 @@ Plugin logs land in `packages/plugin/io.gamov.lcars.sdPlugin/logs/`. The propert
 
 ### Inbox Key
 
-One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most recently changed). Colour is the agent state (orange working, red blocked, green done, grey idle), the badge is the agent kind, the corner tag is the host when more than one host is online, the text is the pane title. Short tap focuses the pane through Ops and raises iTerm. Long press is reserved for Conn and does nothing yet.
+One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most recently changed). Colour is the agent state (orange working, red blocked, green done, grey idle; `done` is a turn that finished while nobody was looking at the pane, cleared when it is focused), the badge is the agent kind, the corner tag is the host when more than one host is online, the text is the pane title. Short tap focuses the pane through Ops and raises iTerm. Long press is reserved for Conn and does nothing yet.
 
 ### Conn and the done ping
 

@@ -142,6 +142,35 @@ pub enum HostEvent {
     PaneClosed {
         pane_id: String,
     },
+    /// Herdr recognised (or released) an agent in the pane.
+    AgentDetected {
+        pane_id: String,
+        agent: Option<String>,
+        released: bool,
+    },
+    /// Fresh `pane.get` after a detection: title, cwd, model arrive here.
+    PaneRefreshed(Box<PaneInfo>),
+    /// Fresh `agent.get` after a turn ended: carries `completion_seq`, from
+    /// which `done` is derived for panes nobody is looking at.
+    AgentRefreshed(Box<AgentInfo>),
+    /// The UI focus moved to this pane; a `done` there becomes `idle`.
+    PaneFocused {
+        pane_id: String,
+    },
+}
+
+/// Herdr's event stream never says `done`; after a turn `agent.get` shows
+/// `completion_seq == state_change_seq`. An unfocused pane in that state is
+/// finished work nobody has looked at yet.
+pub fn derive_state(agent: &AgentInfo) -> AgentState {
+    let finished = agent.agent_status == AgentStatus::Idle
+        && agent.completion_seq == Some(agent.state_change_seq)
+        && !agent.focused;
+    if finished {
+        AgentState::Done
+    } else {
+        agent.agent_status.into()
+    }
 }
 
 /// Merged state across hosts. Cheap to clone; published as a whole.
@@ -260,6 +289,96 @@ impl Fleet {
                 .sessions
                 .remove(&Session::id_for(host, &pane_id))
                 .is_some(),
+            HostEvent::AgentDetected {
+                pane_id,
+                agent,
+                released,
+            } => {
+                let Some(session) = self.sessions.get_mut(&Session::id_for(host, &pane_id)) else {
+                    return false;
+                };
+                let next = if released {
+                    None
+                } else {
+                    agent.or(session.agent.clone())
+                };
+                if session.agent == next {
+                    return false;
+                }
+                session.agent = next;
+                if released {
+                    session.name = None;
+                    session.state = AgentState::Unknown;
+                }
+                session.updated_at_ms = now_ms;
+                true
+            }
+            HostEvent::PaneRefreshed(pane) => {
+                let fresh = Session::from_pane(host, pane.as_ref(), now_ms);
+                let Some(session) = self.sessions.get_mut(&fresh.id) else {
+                    self.sessions.insert(fresh.id.clone(), fresh);
+                    return true;
+                };
+                let mut merged = fresh;
+                merged.name = session.name.clone();
+                merged.seq = session.seq;
+                // A derived `done` outlives a pane refresh; the pane view says idle.
+                if session.state == AgentState::Done && merged.state == AgentState::Idle {
+                    merged.state = AgentState::Done;
+                }
+                merged.updated_at_ms = session.updated_at_ms;
+                if *session == merged {
+                    return false;
+                }
+                merged.updated_at_ms = now_ms;
+                *session = merged;
+                true
+            }
+            HostEvent::AgentRefreshed(agent) => {
+                let id = Session::id_for(host, &agent.pane_id);
+                let Some(session) = self.sessions.get_mut(&id) else {
+                    return false;
+                };
+                let before = session.clone();
+                session.overlay_agent(agent.as_ref());
+                session.agent = agent.agent.clone().or(session.agent.clone());
+                session.state = derive_state(agent.as_ref());
+                session.focused = agent.focused;
+                if let Some(model) = agent.tokens.get("model") {
+                    session.model = Some(model.clone());
+                }
+                if let Some(summary) = agent.tokens.get("summary") {
+                    session.summary = Some(summary.clone());
+                }
+                if agent.terminal_title_stripped.is_some() {
+                    session.title = agent.terminal_title_stripped.clone();
+                }
+                if *session == before {
+                    return false;
+                }
+                session.updated_at_ms = now_ms;
+                true
+            }
+            HostEvent::PaneFocused { pane_id } => {
+                let mut changed = false;
+                for session in self.sessions.values_mut().filter(|s| s.host == host) {
+                    let focused = session.pane_id == pane_id;
+                    let mut touched = false;
+                    if session.focused != focused {
+                        session.focused = focused;
+                        touched = true;
+                    }
+                    if focused && session.state == AgentState::Done {
+                        session.state = AgentState::Idle;
+                        touched = true;
+                    }
+                    if touched {
+                        session.updated_at_ms = now_ms;
+                        changed = true;
+                    }
+                }
+                changed
+            }
         }
     }
 
@@ -559,6 +678,131 @@ mod tests {
             .map(|s| s.pane_id.as_str())
             .collect();
         assert_eq!(order, vec!["w1:p3", "w1:p1", "w1:p2"]);
+    }
+
+    /// AgentInfo as `agent.get` returned it right after the recorded turn in
+    /// docs/fixtures/claude-turn-flow.json: idle, completion_seq == state_change_seq.
+    fn finished_agent(focused: bool) -> AgentInfo {
+        serde_json::from_value(serde_json::json!({
+            "agent":"claude","agent_status":"idle","completion_seq":4718,"state_change_seq":4718,
+            "cwd":"/Users/me/projects/lcars","focused":focused,"foreground_cwd":"/Users/me/projects/lcars",
+            "interactive_ready":true,"name":"conn-test","pane_id":"w9:p2","revision":12,"tab_id":"w9:t1",
+            "terminal_id":"t","terminal_title_stripped":"Run ls -la","tokens":{"model":"fable-5-1"},"workspace_id":"w9"
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn finished_unfocused_turn_is_done_and_focusing_clears_it() {
+        let mut fleet = Fleet::default();
+        fleet.apply(
+            "h",
+            HostEvent::PaneCreated(Box::new(pane_from_fixture())),
+            T0,
+        );
+        assert_eq!(derive_state(&finished_agent(false)), AgentState::Done);
+        assert_eq!(derive_state(&finished_agent(true)), AgentState::Idle);
+        assert!(fleet.apply(
+            "h",
+            HostEvent::AgentRefreshed(Box::new(finished_agent(false))),
+            T0 + 1
+        ));
+        let s = &fleet.sessions["h/w9:p2"];
+        assert_eq!(s.state, AgentState::Done);
+        assert_eq!(s.name.as_deref(), Some("conn-test"));
+        assert_eq!(s.title.as_deref(), Some("Run ls -la"));
+        assert_eq!(s.model.as_deref(), Some("fable-5-1"));
+        assert_eq!(s.seq, 4718);
+        assert!(!fleet.apply(
+            "h",
+            HostEvent::AgentRefreshed(Box::new(finished_agent(false))),
+            T0 + 2
+        ));
+        assert!(fleet.apply(
+            "h",
+            HostEvent::PaneFocused {
+                pane_id: "w9:p2".into()
+            },
+            T0 + 3
+        ));
+        let s = &fleet.sessions["h/w9:p2"];
+        assert_eq!(s.state, AgentState::Idle);
+        assert!(s.focused);
+        let mut pane = pane_from_fixture();
+        pane.agent_status = AgentStatus::Idle;
+        pane.terminal_title_stripped = Some("Run ls -la".into());
+        assert!(fleet.apply("h", HostEvent::PaneRefreshed(Box::new(pane)), T0 + 4));
+        assert_eq!(fleet.sessions["h/w9:p2"].state, AgentState::Idle);
+    }
+
+    #[test]
+    fn agent_detected_sets_the_agent_and_release_clears_it() {
+        let mut fleet = Fleet::default();
+        fleet.apply(
+            "h",
+            HostEvent::PaneCreated(Box::new(pane_from_fixture())),
+            T0,
+        );
+        assert!(fleet.apply(
+            "h",
+            HostEvent::AgentDetected {
+                pane_id: "w9:p2".into(),
+                agent: Some("claude".into()),
+                released: false
+            },
+            T0 + 1
+        ));
+        assert_eq!(fleet.sessions["h/w9:p2"].agent.as_deref(), Some("claude"));
+        assert!(fleet.apply(
+            "h",
+            HostEvent::AgentDetected {
+                pane_id: "w9:p2".into(),
+                agent: Some("claude".into()),
+                released: true
+            },
+            T0 + 2
+        ));
+        assert_eq!(fleet.sessions["h/w9:p2"].agent, None);
+        assert_eq!(fleet.sessions["h/w9:p2"].state, AgentState::Unknown);
+        assert!(!fleet.apply(
+            "h",
+            HostEvent::AgentDetected {
+                pane_id: "w9:p9".into(),
+                agent: None,
+                released: false
+            },
+            T0 + 3
+        ));
+    }
+
+    #[test]
+    fn pane_refresh_fills_in_title_without_losing_name_or_seq() {
+        let mut fleet = Fleet::default();
+        fleet.apply(
+            "h",
+            HostEvent::PaneCreated(Box::new(pane_from_fixture())),
+            T0,
+        );
+        fleet.apply(
+            "h",
+            HostEvent::AgentRefreshed(Box::new(finished_agent(true))),
+            T0 + 1,
+        );
+        let mut pane = pane_from_fixture();
+        pane.agent = Some("claude".into());
+        pane.agent_status = AgentStatus::Working;
+        pane.terminal_title_stripped = Some("Refactor the parser".into());
+        assert!(fleet.apply(
+            "h",
+            HostEvent::PaneRefreshed(Box::new(pane.clone())),
+            T0 + 2
+        ));
+        let s = &fleet.sessions["h/w9:p2"];
+        assert_eq!(s.title.as_deref(), Some("Refactor the parser"));
+        assert_eq!(s.state, AgentState::Working);
+        assert_eq!(s.name.as_deref(), Some("conn-test"));
+        assert_eq!(s.seq, 4718);
+        assert!(!fleet.apply("h", HostEvent::PaneRefreshed(Box::new(pane)), T0 + 3));
     }
 
     #[test]

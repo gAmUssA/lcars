@@ -94,7 +94,9 @@ Per host, one long-lived connection:
 
 1. `ping` → assert protocol 22.
 2. `session.snapshot` → seed state.
-3. `events.subscribe` with `pane.created`, `pane.closed`, `pane_agent_detected`, plus one `pane.agent_status_changed {pane_id}` per pane currently in the snapshot.
+3. `events.subscribe` with `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.focused`, plus one `pane.agent_status_changed {pane_id}` per pane currently in the snapshot.
+   - On `pane_agent_detected` (not released): `pane.get` to pick up title, cwd and model, which the event lacks.
+   - On a status event reaching `idle`: `agent.get`; `completion_seq == state_change_seq` on an unfocused pane means a finished turn, shown as `done` until `pane_focused` arrives for it (Ops derives this; Herdr never pushes `done`).
 4. On `pane_created`: there is no "add subscription" method, so open a replacement connection with the new full pane set, then close the old one once the new ack arrives. Alternatively run a second connection just for the new pane and let it accumulate; replace-and-swap is simpler to reason about. Decide in milestone 2.
 5. On `pane_closed`: drop the pane from state; the subscription for it is harmless.
 6. Reconnect with backoff on EOF; re-run steps 1–3.

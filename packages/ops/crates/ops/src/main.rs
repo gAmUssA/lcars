@@ -155,6 +155,20 @@ fn log_event(host: &str, event: &HostEvent) {
         ),
         HostEvent::PaneCreated(p) => info!(host, pane = %p.pane_id, "pane created"),
         HostEvent::PaneClosed { pane_id } => info!(host, pane = %pane_id, "pane closed"),
+        HostEvent::AgentDetected {
+            pane_id,
+            agent,
+            released,
+        } => {
+            info!(host, pane = %pane_id, agent = agent.as_deref().unwrap_or("-"), released, "agent detected")
+        }
+        HostEvent::PaneRefreshed(p) => {
+            info!(host, pane = %p.pane_id, title = p.terminal_title_stripped.as_deref().unwrap_or(""), "pane refreshed")
+        }
+        HostEvent::AgentRefreshed(a) => {
+            info!(host, pane = %a.pane_id, status = ?a.agent_status, done = a.completion_seq == Some(a.state_change_seq) && !a.focused, "agent refreshed")
+        }
+        HostEvent::PaneFocused { pane_id } => info!(host, pane = %pane_id, "pane focused"),
     }
 }
 

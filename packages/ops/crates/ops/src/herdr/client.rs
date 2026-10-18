@@ -6,8 +6,8 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
 use herdr_compat::api::schema::{
-    EmptyParams, EventData, EventsSubscribeParams, Method, PingParams, Request, ResponseResult,
-    Subscription, SubscriptionEventData,
+    AgentStatus, AgentTarget, EmptyParams, EventData, EventsSubscribeParams, Method, PaneTarget,
+    PingParams, Request, ResponseResult, Subscription, SubscriptionEventData,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
 use tokio::net::UnixStream;
@@ -164,8 +164,68 @@ impl HostClient {
             if let HostEvent::PaneClosed { pane_id } = &event {
                 pane_ids.retain(|id| id != pane_id);
             }
+            // Follow-up reads that the event stream cannot carry: a detected
+            // agent's title and cwd, and the completion sequence that tells a
+            // finished turn from plain idleness (docs/herdr-api.md).
+            let follow_up = match &event {
+                HostEvent::AgentDetected {
+                    pane_id,
+                    released: false,
+                    ..
+                } => self.refresh_pane(pane_id).await,
+                HostEvent::StatusChanged(e) if e.agent_status == AgentStatus::Idle => {
+                    self.refresh_agent(&e.pane_id).await
+                }
+                _ => None,
+            };
             if tx.send((self.name.clone(), event)).await.is_err() {
                 return Ok(());
+            }
+            if let Some(extra) = follow_up {
+                if tx.send((self.name.clone(), extra)).await.is_err() {
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    async fn refresh_pane(&mut self, pane_id: &str) -> Option<HostEvent> {
+        match self
+            .request(Method::PaneGet(PaneTarget {
+                pane_id: pane_id.to_string(),
+            }))
+            .await
+        {
+            Ok(ResponseResult::PaneInfo { pane }) => Some(HostEvent::PaneRefreshed(Box::new(pane))),
+            Ok(other) => {
+                debug!(host = %self.name, pane = %pane_id, ?other, "pane.get returned an unexpected result");
+                None
+            }
+            Err(err) => {
+                debug!(host = %self.name, pane = %pane_id, %err, "pane.get after detection failed");
+                None
+            }
+        }
+    }
+
+    async fn refresh_agent(&mut self, pane_id: &str) -> Option<HostEvent> {
+        match self
+            .request(Method::AgentGet(AgentTarget {
+                target: pane_id.to_string(),
+            }))
+            .await
+        {
+            Ok(ResponseResult::AgentInfo { agent }) => {
+                Some(HostEvent::AgentRefreshed(Box::new(agent)))
+            }
+            Ok(other) => {
+                debug!(host = %self.name, pane = %pane_id, ?other, "agent.get returned an unexpected result");
+                None
+            }
+            // The agent may already be gone (released, pane closed): not an error.
+            Err(err) => {
+                debug!(host = %self.name, pane = %pane_id, %err, "agent.get after idle failed");
+                None
             }
         }
     }
@@ -183,7 +243,12 @@ impl HostClient {
 
     /// Open the long-lived subscription connection for the given panes.
     async fn subscribe(&mut self, pane_ids: &[String]) -> Result<Lines<BufReader<UnixStream>>> {
-        let mut subscriptions = vec![Subscription::PaneCreated {}, Subscription::PaneClosed {}];
+        let mut subscriptions = vec![
+            Subscription::PaneCreated {},
+            Subscription::PaneClosed {},
+            Subscription::PaneAgentDetected {},
+            Subscription::PaneFocused {},
+        ];
         subscriptions.extend(
             pane_ids
                 .iter()
@@ -271,6 +336,17 @@ pub fn dispatch(frame: Frame) -> Option<HostEvent> {
         Frame::Broadcast(envelope) => match envelope.data {
             EventData::PaneCreated { pane } => Some(HostEvent::PaneCreated(Box::new(pane))),
             EventData::PaneClosed { pane_id, .. } => Some(HostEvent::PaneClosed { pane_id }),
+            EventData::PaneAgentDetected {
+                pane_id,
+                agent,
+                released,
+                ..
+            } => Some(HostEvent::AgentDetected {
+                pane_id,
+                agent,
+                released,
+            }),
+            EventData::PaneFocused { pane_id, .. } => Some(HostEvent::PaneFocused { pane_id }),
             _ => None,
         },
         Frame::Response(_) | Frame::Error(_) | Frame::Unknown(_) => None,
@@ -355,6 +431,11 @@ mod tests {
                     seen_subscribes.send(req.clone()).unwrap();
                     json!({"id": id, "result": {"type":"subscription_started"}})
                 }
+                "pane.get" => json!({"id": id, "result": {"type":"pane_info","pane": pane_json()}}),
+                "agent.get" => json!({"id": id, "result": {"type":"agent_info","agent": {
+                    "agent":"lcars-test","agent_status":"idle","completion_seq":7,"state_change_seq":7,
+                    "focused":false,"pane_id":"w9:p2","revision":1,"tab_id":"w9:t1","terminal_id":"t","workspace_id":"w9"
+                }}}),
                 other => panic!("fake herdr got {other}"),
             };
             stream
@@ -396,7 +477,7 @@ mod tests {
 
         let mut events = Vec::new();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
-        while events.len() < 9 {
+        while events.len() < 10 {
             let (host, event) = tokio::time::timeout_at(deadline, rx.recv())
                 .await
                 .expect("events arrive in time")
@@ -422,11 +503,11 @@ mod tests {
             }
             other => panic!("expected snapshot, got {other:?}"),
         }
-        let states: Vec<AgentState> = events[2..8]
+        let states: Vec<AgentState> = events
             .iter()
-            .map(|e| match e {
-                HostEvent::StatusChanged(ev) => ev.agent_status.into(),
-                other => panic!("expected status change, got {other:?}"),
+            .filter_map(|e| match e {
+                HostEvent::StatusChanged(ev) => Some(ev.agent_status.into()),
+                _ => None,
             })
             .collect();
         assert_eq!(
@@ -440,9 +521,19 @@ mod tests {
                 AgentState::Unknown
             ]
         );
+        // The idle event triggered an agent.get; its result follows it.
+        let idle_at = events
+            .iter()
+            .position(|e| matches!(e, HostEvent::StatusChanged(ev) if ev.agent_status == AgentStatus::Idle))
+            .unwrap();
+        assert!(
+            matches!(&events[idle_at + 1], HostEvent::AgentRefreshed(a) if a.completion_seq == Some(7)),
+            "{:?}",
+            events[idle_at + 1]
+        );
         // Server closed the stream: client reports the loss and will retry.
         assert!(
-            matches!(&events[8], HostEvent::Disconnected { error } if error.contains("closed"))
+            matches!(&events[9], HostEvent::Disconnected { error } if error.contains("closed"))
         );
 
         let subscribe = subs_rx.recv().await.unwrap();
@@ -450,11 +541,17 @@ mod tests {
         let kinds: Vec<&str> = subs.iter().map(|s| s["type"].as_str().unwrap()).collect();
         assert_eq!(
             kinds,
-            vec!["pane.created", "pane.closed", "pane.agent_status_changed"]
+            vec![
+                "pane.created",
+                "pane.closed",
+                "pane.agent_detected",
+                "pane.focused",
+                "pane.agent_status_changed"
+            ]
         );
-        assert_eq!(subs[2]["pane_id"], "w9:p2");
+        assert_eq!(subs[4]["pane_id"], "w9:p2");
         assert!(
-            subs[2].get("agent_status").is_none(),
+            subs[4].get("agent_status").is_none(),
             "no status filter: {subs:?}"
         );
         let _ = std::fs::remove_file(path);
@@ -564,7 +661,26 @@ mod tests {
             })
         );
         let detected = parse_frame(r#"{"data":{"agent":"x","pane_id":"w1:p1","type":"pane_agent_detected","workspace_id":"w1"},"event":"pane_agent_detected"}"#).unwrap();
-        assert_eq!(dispatch(detected), None);
+        assert_eq!(
+            dispatch(detected),
+            Some(HostEvent::AgentDetected {
+                pane_id: "w1:p1".into(),
+                agent: Some("x".into()),
+                released: false
+            })
+        );
+        let released = parse_frame(r#"{"data":{"agent":"x","final_status":"idle","pane_id":"w1:p1","released":true,"type":"pane_agent_detected","workspace_id":"w1"},"event":"pane_agent_detected"}"#).unwrap();
+        assert!(matches!(
+            dispatch(released),
+            Some(HostEvent::AgentDetected { released: true, .. })
+        ));
+        let focused = parse_frame(r#"{"data":{"pane_id":"w1:p2","type":"pane_focused","workspace_id":"w1"},"event":"pane_focused"}"#).unwrap();
+        assert_eq!(
+            dispatch(focused),
+            Some(HostEvent::PaneFocused {
+                pane_id: "w1:p2".into()
+            })
+        );
         let unknown = parse_frame(r#"{"data":{},"event":"pane_teleported"}"#).unwrap();
         assert_eq!(dispatch(unknown), None);
     }
