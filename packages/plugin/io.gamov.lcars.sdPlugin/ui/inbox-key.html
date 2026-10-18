@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+  <head lang="en">
+    <title>Inbox Key</title>
+    <meta charset="utf-8" />
+    <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+  </head>
+  <body>
+    <sdpi-item label="Slot">
+      <sdpi-select setting="slotIndex" default="0">
+        <option value="0">Slot 1</option>
+        <option value="1">Slot 2</option>
+        <option value="2">Slot 3</option>
+        <option value="3">Slot 4</option>
+        <option value="4">Slot 5</option>
+        <option value="5">Slot 6</option>
+        <option value="6">Slot 7</option>
+        <option value="7">Slot 8</option>
+      </sdpi-select>
+    </sdpi-item>
+    <sdpi-item label="Label">
+      <sdpi-select setting="display" default="title">
+        <option value="title">Pane title</option>
+        <option value="project">Project folder</option>
+      </sdpi-select>
+    </sdpi-item>
+    <!-- Ops address is global: every LCARS key shares one daemon. -->
+    <sdpi-item label="Ops address">
+      <sdpi-textfield setting="opsUrl" global placeholder="http://127.0.0.1:7677 (default)"></sdpi-textfield>
+    </sdpi-item>
+    <sdpi-item label="">
+      <p style="margin: 0; font-size: 8pt; color: #969696">
+        Keys stay dark until Ops is running: <code>cd packages/ops &amp;&amp; cargo run</code>.
+      </p>
+    </sdpi-item>
+  </body>
+</html>

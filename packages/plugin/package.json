@@ -8,16 +8,29 @@
     "node": ">=20.5.1"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "rollup -c",
+    "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart io.gamov.lcars\"",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "link": "streamdeck link io.gamov.lcars.sdPlugin",
+    "restart": "streamdeck restart io.gamov.lcars",
+    "pack": "streamdeck pack io.gamov.lcars.sdPlugin"
   },
   "dependencies": {
-    "@elgato/streamdeck": "3.0.2"
+    "@elgato/streamdeck": "3.0.2",
+    "ws": "8.22.0"
   },
   "devDependencies": {
+    "@rollup/plugin-commonjs": "29.0.3",
+    "@rollup/plugin-node-resolve": "16.0.3",
+    "@rollup/plugin-terser": "1.0.0",
+    "@rollup/plugin-typescript": "12.3.0",
+    "@tsconfig/node20": "20.1.10",
     "@types/node": "26.6.5",
-    "typescript": "7.0.2",
+    "@types/ws": "8.18.2",
+    "rollup": "4.64.10",
+    "tslib": "2.8.1",
+    "typescript": "5.9.3",
     "vitest": "5.0.5"
   }
 }

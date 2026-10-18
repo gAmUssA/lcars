@@ -50,8 +50,8 @@ Conclusion: `herdr-compat` is usable as-is for protocol 22 / 0.9.4. Ops should s
 | `pane.list` | `{workspace_id?}` | `pane_list` | `panes[]` (PaneInfo). Includes panes with no agent (`agent_status: "unknown"`, no `agent`). |
 | `agent.list` | `{}` | `agent_list` | `agents[]` (AgentInfo). Only panes with a recognised agent. |
 | `events.subscribe` | `{subscriptions: [...]}` | `subscription_started` | Long-lived. See below. |
-| `agent.focus` | `{target}` | `ok` | `target` = live agent name or pane id. Marks seen. Short tap → this. |
-| `pane.focus` | `{pane_id}` | `ok` | For panes without an agent. |
+| `agent.focus` | `{target}` | `agent_info` | `target` = live agent name or pane id. Marks seen. Short tap → this. Observed 2026-10-18: the reply is the focused agent's `agent_info`, not `ok`. |
+| `pane.focus` | `{pane_id}` | `ok` | For panes without an agent. Observed: replies `ok`. |
 | `agent.send_keys` | `{target, keys[]}` | `ok` | Logical keys: `enter`, `esc`, `ctrl+c`, `y`, … Conn (long-press) → `enter` or `y` depending on dialog. |
 | `pane.send_text` | `{pane_id, text}` | `ok` | Literal text, no Enter. |
 | `agent.prompt` | `{target, text, wait?}` | `agent_prompted` | Text + Enter as one submission. Rejects with `agent_blocked` if a dialog is open. |

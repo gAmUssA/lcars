@@ -5,6 +5,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
+use ops::actions::ActionRelay;
 use ops::config::{self, Config};
 use ops::herdr::client::HostClient;
 use ops::model::{Fleet, HostEvent};
@@ -98,17 +99,20 @@ async fn run(config_path: PathBuf) -> Result<()> {
     let (view_tx, view_rx) = watch::channel(Arc::new(FleetView::from_fleet(&fleet)));
     let (event_tx, mut event_rx) = mpsc::channel::<(String, HostEvent)>(256);
 
+    let mut transports = std::collections::HashMap::new();
     for host in &config.hosts {
         let transport = host
             .transport(&state_dir)
             .with_context(|| format!("host `{}`", host.name))?;
         info!(host = %host.name, via = %transport.describe(), "starting herdr client");
+        transports.insert(host.name.clone(), transport.clone());
         tokio::spawn(HostClient::new(host.name.clone(), transport).run(event_tx.clone()));
     }
     drop(event_tx);
+    let relay = Arc::new(ActionRelay::new(transports));
 
     tokio::spawn(async move {
-        if let Err(err) = server::serve(listener, view_rx).await {
+        if let Err(err) = server::serve(listener, view_rx, relay).await {
             warn!(%err, "plugin server stopped");
         }
     });

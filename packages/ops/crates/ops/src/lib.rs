@@ -4,6 +4,7 @@
 //! session list, served to the Stream Deck plugin over loopback HTTP and
 //! WebSocket. See `docs/HANDOFF.md` and `docs/herdr-api.md` in the repo.
 
+pub mod actions;
 pub mod config;
 pub mod herdr;
 pub mod model;

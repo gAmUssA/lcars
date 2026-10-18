@@ -17,3 +17,7 @@ packages/plugin/*.sdPlugin/bin/
 
 # Local env
 .env
+
+# Stream Deck plugin build + runtime artifacts
+packages/plugin/*.sdPlugin/bin/
+packages/plugin/*.sdPlugin/logs/

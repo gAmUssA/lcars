@@ -177,33 +177,8 @@ impl HostClient {
 
     /// One request on a fresh connection; Herdr closes it after replying.
     async fn request(&mut self, method: Method) -> Result<ResponseResult> {
-        let request = Request {
-            id: self.next_id(),
-            method,
-        };
-        let fut = async {
-            let mut stream = self.transport.connect().await?;
-            stream
-                .write_all(encode_request(&request)?.as_bytes())
-                .await
-                .context("writing request")?;
-            let mut lines = BufReader::new(stream).lines();
-            let line = lines
-                .next_line()
-                .await
-                .context("reading response")?
-                .ok_or_else(|| anyhow!("herdr closed the connection without a response"))?;
-            expect_result(&request.id, &line)
-        };
-        tokio::time::timeout(REQUEST_TIMEOUT, fut)
-            .await
-            .map_err(|_| {
-                anyhow!(
-                    "request {} timed out after {:?}",
-                    request.id,
-                    REQUEST_TIMEOUT
-                )
-            })?
+        let id = self.next_id();
+        request_once(&self.transport, id, method).await
     }
 
     /// Open the long-lived subscription connection for the given panes.
@@ -240,6 +215,39 @@ impl HostClient {
             other => bail!("events.subscribe returned {other:?}"),
         }
     }
+}
+
+/// One request/response exchange on a fresh connection to `transport`.
+/// Herdr closes the connection after replying, so nothing is reused.
+pub async fn request_once(
+    transport: &Transport,
+    id: String,
+    method: Method,
+) -> Result<ResponseResult> {
+    let request = Request { id, method };
+    let fut = async {
+        let mut stream = transport.connect().await?;
+        stream
+            .write_all(encode_request(&request)?.as_bytes())
+            .await
+            .context("writing request")?;
+        let mut lines = BufReader::new(stream).lines();
+        let line = lines
+            .next_line()
+            .await
+            .context("reading response")?
+            .ok_or_else(|| anyhow!("herdr closed the connection without a response"))?;
+        expect_result(&request.id, &line)
+    };
+    tokio::time::timeout(REQUEST_TIMEOUT, fut)
+        .await
+        .map_err(|_| {
+            anyhow!(
+                "request {} timed out after {:?}",
+                request.id,
+                REQUEST_TIMEOUT
+            )
+        })?
 }
 
 fn expect_result(id: &str, line: &str) -> Result<ResponseResult> {

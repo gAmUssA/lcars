@@ -1,0 +1,43 @@
+{
+  "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
+  "Name": "LCARS",
+  "Version": "0.1.0.0",
+  "Author": "Viktor Gamov",
+  "Description": "Herdr coding agents across every host on your Stream Deck, fed by the Ops daemon.",
+  "Category": "LCARS",
+  "CategoryIcon": "imgs/plugin/category-icon",
+  "Icon": "imgs/plugin/marketplace",
+  "URL": "https://github.com/gAmUssA/lcars",
+  "CodePath": "bin/plugin.js",
+  "SDKVersion": 3,
+  "Software": {
+    "MinimumVersion": "7.1"
+  },
+  "Nodejs": {
+    "Version": "24",
+    "Debug": "enabled"
+  },
+  "OS": [
+    {
+      "Platform": "mac",
+      "MinimumVersion": "12"
+    }
+  ],
+  "UUID": "io.gamov.lcars",
+  "Actions": [
+    {
+      "Name": "Inbox Key",
+      "UUID": "io.gamov.lcars.inbox",
+      "Icon": "imgs/actions/inbox/icon",
+      "Tooltip": "One Herdr agent pane (by slot). Colour is its state; tap focuses the pane.",
+      "PropertyInspectorPath": "ui/inbox-key.html",
+      "Controllers": ["Keypad"],
+      "States": [
+        {
+          "Image": "imgs/actions/inbox/key",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    }
+  ]
+}
