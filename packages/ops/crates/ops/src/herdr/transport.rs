@@ -77,14 +77,16 @@ impl Transport {
                         .await
                         .with_context(|| format!("cannot create {}", dir.display()))?;
                 }
+                // The master may still hold a forward from an earlier run whose
+                // socket file is gone; `-O forward` then reports success without
+                // recreating it. Cancel first (ignore failure: it may not exist),
+                // then unlink any leftover file.
+                let _ = ssh_control(
+                    control_path,
+                    &["-O", "cancel", "-L", &forward_spec(local_socket, remote_socket), alias],
+                )
+                .await;
                 if tokio::fs::try_exists(local_socket).await.unwrap_or(false) {
-                    // Stale forward from an earlier run. Cancel it on the master
-                    // (ignore failure: it may already be gone) and unlink.
-                    let _ = ssh_control(
-                        control_path,
-                        &["-O", "cancel", "-L", &forward_spec(local_socket, remote_socket), alias],
-                    )
-                    .await;
                     tokio::fs::remove_file(local_socket).await.with_context(|| {
                         format!("cannot remove stale socket {}", local_socket.display())
                     })?;
