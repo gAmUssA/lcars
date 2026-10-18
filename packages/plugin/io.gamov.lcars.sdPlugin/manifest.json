@@ -1,7 +1,7 @@
 {
   "$schema": "https://schemas.elgato.com/streamdeck/plugins/manifest.json",
   "Name": "LCARS",
-  "Version": "0.1.0.0",
+  "Version": "0.2.0.0",
   "Author": "Viktor Gamov",
   "Description": "Herdr coding agents across every host on your Stream Deck, fed by the Ops daemon.",
   "Category": "LCARS",
@@ -38,6 +38,74 @@
           "TitleAlignment": "bottom"
         }
       ]
+    },
+    {
+      "Name": "Scroll Dial",
+      "UUID": "io.gamov.lcars.dial.scroll",
+      "Icon": "imgs/actions/dial-scroll/icon",
+      "Tooltip": "Pages the Inbox Keys when there are more agents than keys. Press returns to page 1.",
+      "Controllers": ["Encoder"],
+      "Encoder": {
+        "layout": "layouts/strip.json",
+        "StackColor": "#F0A030",
+        "TriggerDescription": {
+          "Rotate": "Page the agent list",
+          "Push": "Back to page 1",
+          "Touch": "Filter by host"
+        }
+      },
+      "States": [{ "Image": "imgs/actions/dial-scroll/icon" }]
+    },
+    {
+      "Name": "Machine Dial",
+      "UUID": "io.gamov.lcars.dial.machine",
+      "Icon": "imgs/actions/dial-machine/icon",
+      "Tooltip": "Cycles the host filter: all hosts, then each host in turn. Press shows all hosts.",
+      "Controllers": ["Encoder"],
+      "Encoder": {
+        "layout": "layouts/strip.json",
+        "StackColor": "#9A7BD0",
+        "TriggerDescription": {
+          "Rotate": "Cycle host filter",
+          "Push": "Show all hosts",
+          "Touch": "Filter by host"
+        }
+      },
+      "States": [{ "Image": "imgs/actions/dial-machine/icon" }]
+    },
+    {
+      "Name": "Effort Dial",
+      "UUID": "io.gamov.lcars.dial.effort",
+      "Icon": "imgs/actions/dial-effort/icon",
+      "Tooltip": "Picks a Claude Code reasoning effort; press sends /effort <level> to the focused Claude pane.",
+      "Controllers": ["Encoder"],
+      "Encoder": {
+        "layout": "layouts/strip.json",
+        "StackColor": "#5AA0E0",
+        "TriggerDescription": {
+          "Rotate": "Pick effort level",
+          "Push": "Send /effort to focused Claude",
+          "Touch": "Filter by host"
+        }
+      },
+      "States": [{ "Image": "imgs/actions/dial-effort/icon" }]
+    },
+    {
+      "Name": "Pane Dial",
+      "UUID": "io.gamov.lcars.dial.pane",
+      "Icon": "imgs/actions/dial-pane/icon",
+      "Tooltip": "Scrolls the focused pane's terminal. Press toggles the strip between the fleet bar and the inbox ticker; in ticker mode the dial cycles blocked agents.",
+      "Controllers": ["Encoder"],
+      "Encoder": {
+        "layout": "layouts/strip.json",
+        "StackColor": "#D13438",
+        "TriggerDescription": {
+          "Rotate": "Scroll focused pane / cycle blocked agents",
+          "Push": "Toggle fleet bar / inbox ticker",
+          "Touch": "Focus the blocked agent"
+        }
+      },
+      "States": [{ "Image": "imgs/actions/dial-pane/icon" }]
     }
   ]
 }

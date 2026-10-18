@@ -1,0 +1,89 @@
+import { expect, test } from "vitest";
+import {
+  blockedSessions,
+  clampPage,
+  cycleEffort,
+  cycleHost,
+  filterByHost,
+  focusedSession,
+  hostNames,
+  pageCount,
+  pageSlice,
+  summariseHosts,
+} from "./view-state";
+import type { FleetView, Session } from "../ops/types";
+
+function s(id: string, over: Partial<Session> = {}): Session {
+  const [host, pane_id] = id.split("/");
+  return {
+    id, host, workspace_id: "w1", tab_id: "w1:t1", pane_id, agent: "claude", name: null, state: "idle",
+    title: null, cwd: null, model: null, summary: null, focused: false, seq: 0, updated_at_ms: 0, ...over,
+  };
+}
+
+const keys = [
+  s("ds9/w7:p1", { state: "blocked", updated_at_ms: 50 }),
+  s("daystrom/w1:p1", { state: "working", focused: true }),
+  s("daystrom/w1:p2", { state: "blocked", updated_at_ms: 10 }),
+  s("daystrom/w1:p3"),
+];
+
+test("host filter keeps only that host, null keeps all", () => {
+  expect(filterByHost(keys, "ds9").map((k) => k.id)).toEqual(["ds9/w7:p1"]);
+  expect(filterByHost(keys, null)).toHaveLength(4);
+});
+
+test("paging is eight per page and clamps", () => {
+  expect(pageCount(0)).toBe(1);
+  expect(pageCount(8)).toBe(1);
+  expect(pageCount(9)).toBe(2);
+  expect(clampPage(5, 9)).toBe(1);
+  expect(clampPage(-1, 9)).toBe(0);
+  const many = Array.from({ length: 11 }, (_, i) => s(`h/p${i}`));
+  expect(pageSlice(many, 1).map((k) => k.pane_id)).toEqual(["p8", "p9", "p10"]);
+  expect(pageSlice(many, 7)).toHaveLength(3); // clamped to the last page
+});
+
+test("host cycle goes all → each host → all, both directions", () => {
+  const hosts = ["daystrom", "ds9"];
+  expect(cycleHost(hosts, null, 1)).toBe("daystrom");
+  expect(cycleHost(hosts, "daystrom", 1)).toBe("ds9");
+  expect(cycleHost(hosts, "ds9", 1)).toBeNull();
+  expect(cycleHost(hosts, null, -1)).toBe("ds9");
+  expect(cycleHost([], null, 1)).toBeNull();
+});
+
+test("effort cycles through the levels and stops at the ends", () => {
+  expect(cycleEffort("high", 1)).toBe("xhigh");
+  expect(cycleEffort("max", 1)).toBe("max");
+  expect(cycleEffort("low", -1)).toBe("low");
+  expect(cycleEffort("medium", -3)).toBe("low");
+});
+
+test("blocked sessions come oldest first", () => {
+  expect(blockedSessions(keys).map((k) => k.id)).toEqual(["daystrom/w1:p2", "ds9/w7:p1"]);
+});
+
+test("focused session prefers the deck's own host", () => {
+  const both = [...keys, s("ds9/w7:p9", { focused: true })];
+  expect(focusedSession(both, "daystrom")?.id).toBe("daystrom/w1:p1");
+  expect(focusedSession(both, "ds9")?.id).toBe("ds9/w7:p9");
+  expect(focusedSession(both, "voyager")?.id).toBe("daystrom/w1:p1");
+  expect(focusedSession([s("h/p1")], "h")).toBeNull();
+});
+
+test("host summaries count states and pick the worst", () => {
+  const view: FleetView = {
+    hosts: [
+      { name: "daystrom", connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 },
+      { name: "ds9", connected: false, version: null, protocol: null, error: "down", updated_at_ms: 0 },
+    ],
+    sessions: [],
+  };
+  expect(hostNames(view)).toEqual(["daystrom", "ds9"]);
+  const summary = summariseHosts(view, keys);
+  expect(summary[0].worst).toBe("blocked");
+  expect(summary[0].counts).toEqual({ blocked: 1, done: 0, working: 1, idle: 1, unknown: 0 });
+  expect(summary[1].host?.connected).toBe(false);
+  expect(summariseHosts(null, [])).toEqual([]);
+});

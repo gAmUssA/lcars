@@ -50,3 +50,16 @@ test("a non-JSON failure still reports the status", async () => {
   const { url } = await serve(404, "nope");
   await expect(createOpsActions({ url }).focus("x/y")).rejects.toThrow(/failed \(404\)/);
 });
+
+test("scroll posts the delta and returns the applied offset", async () => {
+  const { url, seen } = await serve(200, '{"ok":true,"offset_from_bottom":13}');
+  const offset = await createOpsActions({ url }).scroll("ds9/w7:p1", 3);
+  expect(offset).toBe(13);
+  expect(JSON.parse(seen[0].body)).toEqual({ action: "scroll", session: "ds9/w7:p1", delta: 3 });
+});
+
+test("prompt posts the text", async () => {
+  const { url, seen } = await serve(200, '{"ok":true}');
+  await createOpsActions({ url }).prompt("daystrom/w1:p1", "/effort high");
+  expect(JSON.parse(seen[0].body)).toEqual({ action: "prompt", session: "daystrom/w1:p1", text: "/effort high" });
+});

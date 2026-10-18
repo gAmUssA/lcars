@@ -16,8 +16,8 @@ Recon notes on the Herdr socket API, with recorded frames as test fixtures: [doc
 | 1. Recon of the Herdr socket API | done |
 | 2. Ops v0: per-host event subscriptions, merged `FleetView`, loopback HTTP + WebSocket | done |
 | 3. Plugin v0: Inbox Key on the Stream Deck +, tap focuses the pane | done |
-| 4. Plus dials and touch strip | next |
-| 5. Claude Code hooks, Conn (long-press approve), done ping | planned |
+| 4. Plus dials and touch strip | done |
+| 5. Claude Code hooks, Conn (long-press approve), done ping | next |
 | 6. Remote keys and travel profile | planned |
 | 7. XL status wall | planned |
 | 8. Packaging, launchd, install | planned |
@@ -70,9 +70,20 @@ Plugin logs land in `packages/plugin/io.gamov.lcars.sdPlugin/logs/`. The propert
 
 One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most recently changed). Colour is the agent state (orange working, red blocked, green done, grey idle), the badge is the agent kind, the corner tag is the host when more than one host is online, the text is the pane title. Short tap focuses the pane through Ops and raises iTerm. Long press is reserved for Conn and does nothing yet.
 
+### Dials and touch strip (Stream Deck +)
+
+| Dial | Rotate | Press | Strip segment |
+| --- | --- | --- | --- |
+| 1 Scroll | page the Inbox Keys (8 per page) | back to page 1 | fleet bar |
+| 2 Machine | cycle host filter: all → each host | show all hosts | fleet bar |
+| 3 Effort | pick a Claude Code effort level (low … max) | send `/effort <level>` to the focused Claude pane | fleet bar |
+| 4 Pane | scroll the focused pane's terminal (3 rows per tick); in ticker mode, cycle blocked agents | toggle fleet bar / inbox ticker | fleet bar |
+
+The strip is one 800×100 scene sliced per dial. Fleet bar: one block per host coloured by its worst agent state with counts, tap a block to filter the keys to that host (tap again to clear); spare blocks show page and effort. Inbox ticker: the oldest blocked agent with its host and title, tap to focus it. The strip dims when Ops is unreachable.
+
 ### Deck layout
 
-The Plus page "LCARS" (8 Inbox Keys, slots 1–8) was written with [streamdeck-mcp](https://github.com/verygoodplugins/streamdeck-mcp)'s profile manager, which edits Elgato's `ProfilesV3` files directly and must quit and relaunch the Stream Deck app around the write. Reproducible profile generation from a spec is milestone 7.
+The Plus page "LCARS" (8 Inbox Keys, slots 1–8, plus the four dials) was written with [streamdeck-mcp](https://github.com/verygoodplugins/streamdeck-mcp)'s profile manager, which edits Elgato's `ProfilesV3` files directly and must quit and relaunch the Stream Deck app around the write. Reproducible profile generation from a spec is milestone 7.
 
 ## License
 
