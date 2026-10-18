@@ -30,7 +30,7 @@ Conclusion: `herdr-compat` is usable as-is for protocol 22 / 0.9.4. Ops should s
 ### Drift against the handoff doc
 
 - `herdr --machine <label-or-id> <command>` **does** forward API commands (`agent list`, `pane list`, `agent prompt`) to a saved SSH machine (`herdr --skill`, "To control a saved SSH machine"). The third-sweep note that the CLI stays strictly server-scoped is outdated for the CLI. It remains true that IDs (`w1:p1`) and agent names are per-server, that there is no merged inventory, and that `machine list` is a profile list. `herdr machine list --json` on Daystrom returns `[]`: no machines are saved yet. Whether `events.subscribe` works through `--machine` forwarding is untested (no profile). Ops design is unchanged: one socket per host, merge locally.
-- Handoff says Elgato SDK v2. Current `@elgato/streamdeck` on npm is 3.0.2. See `packages/plugin` notes before pinning.
+- Handoff says Elgato SDK v2. Current `@elgato/streamdeck` on npm is 3.0.2; Vik approved v3 on 2026-10-18 and `packages/plugin` pins 3.0.2.
 
 ## Wire format
 

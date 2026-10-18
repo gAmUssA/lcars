@@ -12,7 +12,7 @@ Stream Deck console for coding agents. Read `docs/HANDOFF.md` before changing ar
 ## Components
 
 - Ops: Rust, built on kcosr's `herdr-compat` crate (targets Herdr v0.9.3, protocol 22). Cargo workspace in `packages/ops`.
-- Plugin: Node 20+/TypeScript, `@elgato/streamdeck` v2, fork of timvdhoorn/stream-deck-herdr-plugin. Thin: paint keys, forward presses to Ops.
+- Plugin: Node 20+/TypeScript, `@elgato/streamdeck` v3 (3.0.2), fork of timvdhoorn/stream-deck-herdr-plugin. Thin: paint keys, forward presses to Ops.
 - Herdr is the only agent source. Every host runs it. No other agent discovery path.
 
 ## Herdr rules
