@@ -64,10 +64,17 @@ pub async fn serve(
 }
 
 /// `POST /actions` body. `session` is a `FleetView` session id (`host/pane`).
+///
+/// Actions: `focus`; `scroll` with `delta` rows (positive scrolls up into
+/// scrollback); `prompt` with `text` submitted to the agent plus Enter.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionRequest {
     pub action: String,
     pub session: String,
+    #[serde(default)]
+    pub delta: Option<i64>,
+    #[serde(default)]
+    pub text: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -75,6 +82,9 @@ pub struct ActionResponse {
     pub ok: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<String>,
+    /// `scroll`: the offset from bottom that was applied.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset_from_bottom: Option<u64>,
 }
 
 fn action_error(status: StatusCode, error: String) -> (StatusCode, Json<ActionResponse>) {
@@ -83,6 +93,7 @@ fn action_error(status: StatusCode, error: String) -> (StatusCode, Json<ActionRe
         Json(ActionResponse {
             ok: false,
             error: Some(error),
+            offset_from_bottom: None,
         }),
     )
 }
@@ -107,23 +118,39 @@ async fn actions(
             ),
         );
     };
-    let result = match request.action.as_str() {
-        "focus" => state.relay.focus(&session).await,
+    let result: anyhow::Result<Option<u64>> = match request.action.as_str() {
+        "focus" => state.relay.focus(&session).await.map(|()| None),
+        "scroll" => match request.delta {
+            Some(delta) => state.relay.scroll(&session, delta).await.map(Some),
+            None => {
+                return action_error(
+                    StatusCode::BAD_REQUEST,
+                    "scroll needs `delta` (rows, positive = up)".to_string(),
+                )
+            }
+        },
+        "prompt" => match request.text.as_deref() {
+            Some(text) => state.relay.prompt(&session, text).await.map(|()| None),
+            None => {
+                return action_error(StatusCode::BAD_REQUEST, "prompt needs `text`".to_string())
+            }
+        },
         other => {
             return action_error(
                 StatusCode::BAD_REQUEST,
-                format!("unknown action `{other}`; supported: focus"),
+                format!("unknown action `{other}`; supported: focus, scroll, prompt"),
             )
         }
     };
     match result {
-        Ok(()) => {
+        Ok(offset_from_bottom) => {
             info!(action = %request.action, session = %session.id, "action relayed");
             (
                 StatusCode::OK,
                 Json(ActionResponse {
                     ok: true,
                     error: None,
+                    offset_from_bottom,
                 }),
             )
         }
@@ -231,10 +258,20 @@ mod tests {
                 continue;
             };
             let req: serde_json::Value = serde_json::from_str(&line).unwrap();
-            let result: serde_json::Value = if req["method"] == "agent.focus" {
-                serde_json::from_str(AGENT_FOCUS_REPLY).unwrap()
-            } else {
-                serde_json::json!({"type": "ok"})
+            let result: serde_json::Value = match req["method"].as_str().unwrap() {
+                "agent.focus" => serde_json::from_str(AGENT_FOCUS_REPLY).unwrap(),
+                "agent.prompt" => {
+                    let mut v: serde_json::Value = serde_json::from_str(AGENT_FOCUS_REPLY).unwrap();
+                    v["type"] = serde_json::json!("agent_prompted");
+                    v
+                }
+                // Recorded pane shape (docs/fixtures): 40 rows of scrollback above.
+                "pane.get" => serde_json::json!({"type": "pane_info", "pane": {
+                    "pane_id": "w7:p1", "terminal_id": "t", "workspace_id": "w7", "tab_id": "w7:t1",
+                    "focused": true, "agent_status": "blocked", "revision": 3,
+                    "scroll": {"offset_from_bottom": 10, "max_offset_from_bottom": 40, "viewport_rows": 22}
+                }}),
+                _ => serde_json::json!({"type": "ok"}),
             };
             let reply = serde_json::json!({"id": req["id"], "result": result});
             seen.send(req).unwrap();
@@ -334,6 +371,69 @@ mod tests {
         let req = h.herdr_requests.recv().await.unwrap();
         assert_eq!(req["method"], "pane.focus");
         assert_eq!(req["params"]["pane_id"], "w7:p2");
+    }
+
+    #[tokio::test]
+    async fn scroll_reads_the_offset_then_sets_a_clamped_absolute_one() {
+        let mut h = start().await;
+        // 10 + 3 rows up = 13.
+        let (status, json) = post_action(
+            h.addr,
+            r#"{"action":"scroll","session":"ds9/w7:p1","delta":3}"#,
+        )
+        .await;
+        assert_eq!(status, 200, "{json}");
+        assert_eq!(json["offset_from_bottom"], 13);
+        let get = h.herdr_requests.recv().await.unwrap();
+        assert_eq!(get["method"], "pane.get");
+        let scroll = h.herdr_requests.recv().await.unwrap();
+        assert_eq!(scroll["method"], "pane.scroll");
+        assert_eq!(
+            scroll["params"],
+            serde_json::json!({"pane_id": "w7:p1", "offset_from_bottom": 13})
+        );
+        // Past the top clamps to max (40); past the bottom clamps to 0.
+        let (_, json) = post_action(
+            h.addr,
+            r#"{"action":"scroll","session":"ds9/w7:p1","delta":500}"#,
+        )
+        .await;
+        assert_eq!(json["offset_from_bottom"], 40);
+        let (_, json) = post_action(
+            h.addr,
+            r#"{"action":"scroll","session":"ds9/w7:p1","delta":-500}"#,
+        )
+        .await;
+        assert_eq!(json["offset_from_bottom"], 0);
+        let (status, json) =
+            post_action(h.addr, r#"{"action":"scroll","session":"ds9/w7:p1"}"#).await;
+        assert_eq!(status, 400);
+        assert!(json["error"].as_str().unwrap().contains("delta"));
+    }
+
+    #[tokio::test]
+    async fn prompt_submits_text_to_the_agent_and_refuses_empty_or_agentless() {
+        let mut h = start().await;
+        let (status, json) = post_action(
+            h.addr,
+            r#"{"action":"prompt","session":"ds9/w7:p1","text":"/effort high"}"#,
+        )
+        .await;
+        assert_eq!(status, 200, "{json}");
+        let req = h.herdr_requests.recv().await.unwrap();
+        assert_eq!(req["method"], "agent.prompt");
+        assert_eq!(req["params"]["target"], "w7:p1");
+        assert_eq!(req["params"]["text"], "/effort high");
+        let (status, _) = post_action(
+            h.addr,
+            r#"{"action":"prompt","session":"ds9/w7:p1","text":"  "}"#,
+        )
+        .await;
+        assert_eq!(status, 502);
+        let (status, json) =
+            post_action(h.addr, r#"{"action":"prompt","session":"ds9/w7:p1"}"#).await;
+        assert_eq!(status, 400);
+        assert!(json["error"].as_str().unwrap().contains("text"));
     }
 
     #[tokio::test]
