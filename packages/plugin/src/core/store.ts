@@ -33,6 +33,8 @@ export type FleetStore = {
   setDown(): void;
   /** Session shown in a slot of the current page, or null when the slot is empty. */
   sessionAt(slot: number): Session | null;
+  /** Session at an absolute slot over the whole filtered list (wall layout), ignoring paging. */
+  sessionAtAbsolute(slot: number): Session | null;
   /** All keyed sessions regardless of the host filter. */
   allKeys(): Session[];
   movePage(step: number): void;
@@ -94,6 +96,9 @@ export function createFleetStore(opts: { localHost?: string | null } = {}): Flee
     },
     sessionAt(slot) {
       return pageSlice(state.keys, state.ui.page)[slot] ?? null;
+    },
+    sessionAtAbsolute(slot) {
+      return state.keys[slot] ?? null;
     },
     allKeys: () => all,
     movePage(step) {

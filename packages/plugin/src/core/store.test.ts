@@ -80,6 +80,10 @@ test("paging moves through keys and resets", () => {
   store.movePage(1);
   expect(store.getState().ui.page).toBe(1);
   expect(store.sessionAt(0)?.pane_id).toBe("p8");
+  // Wall slots ignore the page.
+  expect(store.sessionAtAbsolute(0)?.pane_id).toBe("p0");
+  expect(store.sessionAtAbsolute(10)?.pane_id).toBe("p10");
+  expect(store.sessionAtAbsolute(11)).toBeNull();
   store.movePage(3);
   expect(store.getState().ui.page).toBe(1); // clamped
   store.resetPage();

@@ -16,19 +16,27 @@ import { renderKeySvg, renderOfflineSvg } from "../core/render";
 import type { OpsActions } from "../ops/actions";
 import type { TerminalActivator } from "../os/terminal";
 
-export type InboxSettings = { slotIndex?: number | string; display?: DisplayMode };
+export type KeyLayout = "paged" | "wall";
+export type InboxSettings = { slotIndex?: number | string; display?: DisplayMode; layout?: KeyLayout };
 
 /** Presses at or above this are long presses (Conn, later). */
 export const LONG_PRESS_MS = 400;
 
-type SlotConfig = { slot: number; display: DisplayMode };
+type SlotConfig = { slot: number; display: DisplayMode; layout: KeyLayout };
 
 export function slotConfig(settings: InboxSettings): SlotConfig {
   const parsed = Number(settings.slotIndex ?? 0);
   return {
     slot: Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0,
     display: settings.display === "project" ? "project" : "title",
+    // "paged" follows the Plus scroll dial (8 per page); "wall" is an absolute
+    // slot over the whole list, for the XL where every agent has its own key.
+    layout: settings.layout === "wall" ? "wall" : "paged",
   };
+}
+
+function sessionFor(store: FleetStore, config: SlotConfig) {
+  return config.layout === "wall" ? store.sessionAtAbsolute(config.slot) : store.sessionAt(config.slot);
 }
 
 export const INBOX_KEY_UUID = "io.gamov.lcars.inbox";
@@ -71,8 +79,7 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
   override async onKeyUp(ev: KeyUpEvent<InboxSettings>): Promise<void> {
     const start = this.#pressStart.get(ev.action.id);
     this.#pressStart.delete(ev.action.id);
-    const { slot } = slotConfig(ev.payload.settings);
-    const session = this.store.sessionAt(slot);
+    const session = sessionFor(this.store, slotConfig(ev.payload.settings));
     if (!session) return;
     const longPress = start !== undefined && this.now() - start >= LONG_PRESS_MS;
     if (longPress) {
@@ -100,13 +107,13 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
     const neverConnected = state.view === null;
     this.actions.forEach((a) => {
       if (!a.isKey()) return;
-      const config = this.#configs.get(a.id) ?? { slot: 0, display: "title" as DisplayMode };
+      const config = this.#configs.get(a.id) ?? { slot: 0, display: "title" as DisplayMode, layout: "paged" as KeyLayout };
       void a.setTitle("");
       if (neverConnected) {
         void a.setImage(renderOfflineSvg());
         return;
       }
-      const session = this.store.sessionAt(config.slot);
+      const session = sessionFor(this.store, config);
       void a.setImage(
         renderKeySvg(
           session

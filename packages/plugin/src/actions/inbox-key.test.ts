@@ -2,13 +2,14 @@ import { expect, test } from "vitest";
 import { INBOX_KEY_UUID, LONG_PRESS_MS, slotConfig } from "./inbox-key";
 import manifest from "../../io.gamov.lcars.sdPlugin/manifest.json";
 
-test("slot settings default to slot 0 and title labels", () => {
-  expect(slotConfig({})).toEqual({ slot: 0, display: "title" });
+test("slot settings default to slot 0, title labels, paged layout", () => {
+  expect(slotConfig({})).toEqual({ slot: 0, display: "title", layout: "paged" });
 });
 
 test("slot index accepts the string the property inspector sends", () => {
-  expect(slotConfig({ slotIndex: "3", display: "project" })).toEqual({ slot: 3, display: "project" });
-  expect(slotConfig({ slotIndex: 7 })).toEqual({ slot: 7, display: "title" });
+  expect(slotConfig({ slotIndex: "3", display: "project" })).toEqual({ slot: 3, display: "project", layout: "paged" });
+  expect(slotConfig({ slotIndex: 7, layout: "wall" })).toEqual({ slot: 7, display: "title", layout: "wall" });
+  expect(slotConfig({ layout: "sideways" as never }).layout).toBe("paged");
 });
 
 test("garbage slot values fall back to slot 0", () => {

@@ -19,7 +19,7 @@ Recon notes on the Herdr socket API, with recorded frames as test fixtures: [doc
 | 4. Plus dials and touch strip | done |
 | 5. Claude Code hooks, Conn (long-press approve), done ping | next |
 | 6. Remote keys and travel profile | planned |
-| 7. XL status wall | planned |
+| 7. XL status wall | agent wall done, global row and third-party rows planned |
 | 8. Packaging, launchd, install | planned |
 
 ## Requirements
@@ -80,6 +80,10 @@ One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most rec
 | 4 Pane | scroll the focused pane's terminal (3 rows per tick); in ticker mode, cycle blocked agents | toggle fleet bar / inbox ticker | fleet bar |
 
 The strip is one 800×100 scene sliced per dial. Fleet bar: one block per host coloured by its worst agent state with counts, tap a block to filter the keys to that host (tap again to clear); spare blocks show page and effort. Inbox ticker: the oldest blocked agent with its host and title, tap to focus it. The strip dims when Ops is unreachable.
+
+### XL agent wall
+
+The XL page "LCARS" holds 24 Inbox Keys in **wall** layout: slot n is the n-th agent across all hosts in Ops's order (blocked first, then most recent), no paging. Row 4 is free for the global keys of milestone 7. New agents appear as soon as Ops sees their first status event; keys beyond the agent count stay black.
 
 ### Deck layout
 
