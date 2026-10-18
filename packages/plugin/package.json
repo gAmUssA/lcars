@@ -1,0 +1,23 @@
+{
+  "name": "lcars-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LCARS Stream Deck plugin: paints Herdr pane state from Ops onto keys, dials and the touch strip",
+  "type": "module",
+  "engines": {
+    "node": ">=20.5.1"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@elgato/streamdeck": "2.1.2"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.5",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5"
+  }
+}
