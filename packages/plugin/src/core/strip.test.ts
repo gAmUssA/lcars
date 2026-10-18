@@ -47,7 +47,7 @@ test("fleet bar colours a host by its worst state and marks offline hosts", () =
   expect(svg).toContain(">STUDIO<");
   expect(svg).toContain("#D13438"); // blocked colour
   expect(svg).toContain("1 blocked · 2 working");
-  expect(svg).toContain(">Mini<");
+  expect(svg).toContain(">MINI<");
   expect(svg).toContain(">offline<");
 });
 
@@ -76,7 +76,7 @@ test("ticker shows the current blocked agent and tapping focuses it", () => {
   const svg = decode(renderStripSegment(ticker, 0));
   expect(svg).toContain(">BLOCKED<");
   expect(svg).toContain(">2 of 2<");
-  expect(svg).toContain("CLAUDE on Mini");
+  expect(svg).toContain("CLAUDE on MINI");
   expect(stripTap(ticker, 2, 10)).toEqual({ kind: "focus", sessionId: "mini/w7:p1" });
   const first = decode(renderStripSegment({ ...ticker, tickerIndex: 0 }, 1));
   expect(first).toContain("CUE-JUDGE on STUDIO");

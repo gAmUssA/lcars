@@ -39,9 +39,10 @@ test("project mode numbers panes that share a folder, across hosts", () => {
   const b = session({ id: "studio/w1:p2", pane_id: "w1:p2" });
   const c = session({ id: "mini/w7:p1", host: "mini", pane_id: "w7:p1" });
   const peers = [c, b, a];
-  expect(labelFor(a, peers, "project")).toBe("dotfiles #1");
-  expect(labelFor(b, peers, "project")).toBe("dotfiles #2");
-  expect(labelFor(c, peers, "project")).toBe("dotfiles #3");
+  // Numbered by host name then pane id: mini sorts before studio.
+  expect(labelFor(c, peers, "project")).toBe("dotfiles #1");
+  expect(labelFor(a, peers, "project")).toBe("dotfiles #2");
+  expect(labelFor(b, peers, "project")).toBe("dotfiles #3");
 });
 
 test("project mode without a cwd falls back to the agent kind", () => {
@@ -60,6 +61,6 @@ test("host tag only shows for a multi-host fleet", () => {
     sessions: [],
   };
   expect(hostTag(session({}), two)).toBe("STUD");
-  expect(hostTag(session({ host: "mini" }), two)).toBe("Mini");
+  expect(hostTag(session({ host: "mini" }), two)).toBe("MINI");
   expect(hostTag(session({}), null)).toBeNull();
 });
