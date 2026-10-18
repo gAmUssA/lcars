@@ -7,12 +7,12 @@ use std::collections::HashMap;
 use anyhow::{anyhow, bail, Result};
 use herdr_compat::api::schema::{
     AgentPromptParams, AgentSendKeysParams, AgentTarget, Method, PaneScrollParams,
-    PaneSendKeysParams, PaneTarget, ResponseResult,
+    PaneSendKeysParams, PaneTarget, ResponseResult, WorkspaceTarget,
 };
 
 use crate::herdr::client::request_once;
 use crate::herdr::transport::Transport;
-use crate::model::Session;
+use crate::model::{Session, Workspace};
 
 pub struct ActionRelay {
     hosts: HashMap<String, Transport>,
@@ -146,6 +146,29 @@ impl ActionRelay {
             | ResponseResult::AgentInfo { .. }
             | ResponseResult::PaneInfo { .. } => Ok(()),
             other => bail!("send_keys on {} returned {other:?}", session.id),
+        }
+    }
+
+    /// Switch the host's Herdr UI to `workspace`.
+    pub async fn focus_workspace(&self, workspace: &Workspace) -> Result<()> {
+        let transport = self.hosts.get(&workspace.host).ok_or_else(|| {
+            anyhow!(
+                "host `{}` is not configured in ops.toml — the workspace list is stale",
+                workspace.host
+            )
+        })?;
+        let id = format!("ops:{}:ws:{}", workspace.host, workspace.workspace_id);
+        match request_once(
+            transport,
+            id,
+            Method::WorkspaceFocus(WorkspaceTarget {
+                workspace_id: workspace.workspace_id.clone(),
+            }),
+        )
+        .await?
+        {
+            ResponseResult::Ok {} | ResponseResult::WorkspaceInfo { .. } => Ok(()),
+            other => bail!("workspace.focus on {} returned {other:?}", workspace.id),
         }
     }
 

@@ -28,13 +28,15 @@ use tokio::sync::{broadcast, watch};
 use tracing::{debug, info, warn};
 
 use crate::actions::ActionRelay;
-use crate::model::{AgentState, Fleet, HostStatus, Session};
+use crate::model::{AgentState, Fleet, HostStatus, Session, Workspace};
 
 /// What the plugin receives: hosts plus sessions in display order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FleetView {
     pub hosts: Vec<HostStatus>,
     pub sessions: Vec<Session>,
+    #[serde(default)]
+    pub workspaces: Vec<Workspace>,
 }
 
 impl FleetView {
@@ -42,6 +44,7 @@ impl FleetView {
         FleetView {
             hosts: fleet.hosts.values().cloned().collect(),
             sessions: fleet.sessions_sorted().into_iter().cloned().collect(),
+            workspaces: fleet.workspaces_sorted().into_iter().cloned().collect(),
         }
     }
 }
@@ -150,12 +153,16 @@ async fn require_token(State(state): State<AppState>, request: Request, next: Ne
 ///
 /// Actions: `focus`; `scroll` with `delta` rows (positive scrolls up into
 /// scrollback); `prompt` with `text` submitted to the agent plus Enter;
-/// `send_keys` with `keys` (Herdr logical key names such as `enter`, `esc`).
+/// `send_keys` with `keys` (Herdr logical key names such as `enter`, `esc`);
+/// `focus_workspace` with `workspace` (`host/w1`) instead of `session`.
 /// Keys outside `SAFE_KEYS` are relayed only to a `blocked` session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionRequest {
     pub action: String,
+    #[serde(default)]
     pub session: String,
+    #[serde(default)]
+    pub workspace: Option<String>,
     #[serde(default)]
     pub delta: Option<i64>,
     #[serde(default)]
@@ -194,6 +201,9 @@ async fn actions(
     State(state): State<AppState>,
     Json(request): Json<ActionRequest>,
 ) -> (StatusCode, Json<ActionResponse>) {
+    if request.action == "focus_workspace" {
+        return focus_workspace(&state, request.workspace.as_deref().unwrap_or("")).await;
+    }
     let (session, host) = {
         let view = state.fleet.borrow();
         let session = view
@@ -291,6 +301,48 @@ async fn actions(
     }
 }
 
+async fn focus_workspace(state: &AppState, id: &str) -> (StatusCode, Json<ActionResponse>) {
+    let (workspace, host) = {
+        let view = state.fleet.borrow();
+        let workspace = view.workspaces.iter().find(|w| w.id == id).cloned();
+        let host = workspace
+            .as_ref()
+            .and_then(|w| view.hosts.iter().find(|h| h.name == w.host).cloned());
+        (workspace, host)
+    };
+    let Some(workspace) = workspace else {
+        return action_error(
+            StatusCode::NOT_FOUND,
+            format!("no workspace `{id}` — the key may be stale, wait for the next update"),
+        );
+    };
+    if let Some(host) = host {
+        if !host.connected {
+            return action_error(
+                StatusCode::SERVICE_UNAVAILABLE,
+                format!("host `{}` is disconnected", host.name),
+            );
+        }
+    }
+    match state.relay.focus_workspace(&workspace).await {
+        Ok(()) => {
+            info!(workspace = %workspace.id, "workspace focused");
+            (
+                StatusCode::OK,
+                Json(ActionResponse {
+                    ok: true,
+                    error: None,
+                    offset_from_bottom: None,
+                }),
+            )
+        }
+        Err(err) => {
+            warn!(workspace = %workspace.id, error = %format!("{err:#}"), "workspace focus failed");
+            action_error(StatusCode::BAD_GATEWAY, format!("{err:#}"))
+        }
+    }
+}
+
 async fn ws_upgrade(ws: WebSocketUpgrade, State(state): State<AppState>) -> impl IntoResponse {
     ws.on_upgrade(move |socket| ws_stream(socket, state.fleet, state.updates.subscribe()))
 }
@@ -383,6 +435,13 @@ mod tests {
             status_event("w7:p1", AgentStatus::Blocked, Some("claude")),
             1_002,
         );
+        let ws: herdr_compat::api::schema::WorkspaceInfo =
+            serde_json::from_value(serde_json::json!({
+                "workspace_id": "w7", "number": 1, "label": "watch", "focused": true,
+                "pane_count": 2, "tab_count": 1, "active_tab_id": "w7:t1", "agent_status": "blocked"
+            }))
+            .unwrap();
+        fleet.apply("mini", HostEvent::Workspaces(vec![ws]), 1_003);
         fleet
     }
 
@@ -719,6 +778,32 @@ mod tests {
             post_action(h.addr, r#"{"action":"focus","session":"mini/w7:p1"}"#).await;
         assert_eq!(status, 503, "{json}");
         assert!(json["error"].as_str().unwrap().contains("ssh master gone"));
+    }
+
+    #[tokio::test]
+    async fn focus_workspace_relays_workspace_focus_and_rejects_unknown_ids() {
+        let mut h = start().await;
+        let (status, body) = get(h.addr, "/sessions", Some(TOKEN)).await;
+        assert_eq!(status, 200);
+        let view: FleetView = serde_json::from_str(&body).unwrap();
+        assert_eq!(view.workspaces.len(), 1);
+        assert_eq!(view.workspaces[0].id, "mini/w7");
+        assert_eq!(view.workspaces[0].label, "watch");
+        let (status, json) = post_action(
+            h.addr,
+            r#"{"action":"focus_workspace","workspace":"mini/w7"}"#,
+        )
+        .await;
+        assert_eq!(status, 200, "{json}");
+        let req = h.herdr_requests.recv().await.unwrap();
+        assert_eq!(req["method"], "workspace.focus");
+        assert_eq!(req["params"]["workspace_id"], "w7");
+        let (status, _) = post_action(
+            h.addr,
+            r#"{"action":"focus_workspace","workspace":"mini/w0"}"#,
+        )
+        .await;
+        assert_eq!(status, 404);
     }
 
     #[tokio::test]

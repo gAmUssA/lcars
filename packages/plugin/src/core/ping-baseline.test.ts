@@ -7,7 +7,7 @@ function s(id: string, state: Session["state"]): Session {
   return { id, host, workspace_id: "w1", tab_id: "w1:t1", pane_id, agent: "claude", name: null, state, title: null, cwd: null, model: null, summary: null, focused: false, seq: 0, updated_at_ms: 0 };
 }
 const host = (name: string, connected: boolean) => ({ name, local: false, connected, version: null, protocol: null, error: null, updated_at_ms: 0 });
-const view = (hosts: ReturnType<typeof host>[], sessions: Session[]): FleetView => ({ hosts, sessions });
+const view = (hosts: ReturnType<typeof host>[], sessions: Session[]): FleetView => ({ hosts, sessions, workspaces: [] });
 
 test("a remote host's backlog arrives after its Connected frame and does not ping", () => {
   // Frame 1: local host already up with sessions; mini connected, no sessions yet.

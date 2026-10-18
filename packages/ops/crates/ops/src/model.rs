@@ -3,7 +3,9 @@
 
 use std::collections::BTreeMap;
 
-use herdr_compat::api::schema::{AgentInfo, AgentStatus, PaneAgentStatusChangedEvent, PaneInfo};
+use herdr_compat::api::schema::{
+    AgentInfo, AgentStatus, PaneAgentStatusChangedEvent, PaneInfo, WorkspaceInfo,
+};
 use serde::{Deserialize, Serialize};
 
 /// Agent lifecycle state as the plugin sees it. Mirrors Herdr's
@@ -111,6 +113,22 @@ impl Session {
     }
 }
 
+/// One Herdr workspace on one host, for the workspace keys.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Workspace {
+    /// `<host>/<workspace_id>`.
+    pub id: String,
+    pub host: String,
+    pub workspace_id: String,
+    /// Herdr's 1-based ordinal, the order the TUI shows.
+    pub number: usize,
+    pub label: String,
+    pub focused: bool,
+    pub pane_count: usize,
+    /// Herdr's own roll-up of the agents inside.
+    pub state: AgentState,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostStatus {
     pub name: String,
@@ -160,6 +178,11 @@ pub enum HostEvent {
     PaneFocused {
         pane_id: String,
     },
+    /// The host's workspace list, from a snapshot. Replaces the host's set.
+    Workspaces(Vec<WorkspaceInfo>),
+    /// A workspace was created, closed, renamed or focused; the client
+    /// answers with a fresh snapshot, the merge needs nothing.
+    WorkspacesChanged,
 }
 
 /// Herdr's event stream never says `done`; after a turn `agent.get` shows
@@ -181,6 +204,8 @@ pub fn derive_state(agent: &AgentInfo) -> AgentState {
 pub struct Fleet {
     pub hosts: BTreeMap<String, HostStatus>,
     pub sessions: BTreeMap<String, Session>,
+    #[serde(default)]
+    pub workspaces: BTreeMap<String, Workspace>,
 }
 
 impl Fleet {
@@ -385,6 +410,39 @@ impl Fleet {
                 session.updated_at_ms = now_ms;
                 true
             }
+            HostEvent::WorkspacesChanged => false,
+            HostEvent::Workspaces(list) => {
+                let before: Vec<Workspace> = self
+                    .workspaces
+                    .values()
+                    .filter(|w| w.host == host)
+                    .cloned()
+                    .collect();
+                self.workspaces.retain(|_, w| w.host != host);
+                for info in &list {
+                    let id = format!("{host}/{}", info.workspace_id);
+                    self.workspaces.insert(
+                        id.clone(),
+                        Workspace {
+                            id,
+                            host: host.to_string(),
+                            workspace_id: info.workspace_id.clone(),
+                            number: info.number,
+                            label: info.label.clone(),
+                            focused: info.focused,
+                            pane_count: info.pane_count,
+                            state: info.agent_status.into(),
+                        },
+                    );
+                }
+                let after: Vec<Workspace> = self
+                    .workspaces
+                    .values()
+                    .filter(|w| w.host == host)
+                    .cloned()
+                    .collect();
+                before != after
+            }
             HostEvent::PaneFocused { pane_id } => {
                 let mut changed = false;
                 for session in self.sessions.values_mut().filter(|s| s.host == host) {
@@ -424,6 +482,13 @@ impl Fleet {
 
     pub fn sessions_for<'a>(&'a self, host: &'a str) -> impl Iterator<Item = &'a Session> + 'a {
         self.sessions.values().filter(move |s| s.host == host)
+    }
+
+    /// Workspaces in display order: by host name, then Herdr's ordinal.
+    pub fn workspaces_sorted(&self) -> Vec<&Workspace> {
+        let mut list: Vec<&Workspace> = self.workspaces.values().collect();
+        list.sort_by(|a, b| a.host.cmp(&b.host).then_with(|| a.number.cmp(&b.number)));
+        list
     }
 
     /// Sessions in display order: blocked first, then most recently changed.
@@ -875,6 +940,60 @@ mod tests {
         assert_eq!(s.name.as_deref(), Some("conn-test"));
         assert_eq!(s.seq, 4718);
         assert!(!fleet.apply("h", HostEvent::PaneRefreshed(Box::new(pane)), T0 + 3));
+    }
+
+    #[test]
+    fn workspaces_replace_per_host_and_sort_by_host_then_number() {
+        let mut fleet = Fleet::default();
+        let ws = |id: &str,
+                  number: usize,
+                  label: &str,
+                  status: &str,
+                  focused: bool|
+         -> WorkspaceInfo {
+            serde_json::from_value(serde_json::json!({
+                "workspace_id": id, "number": number, "label": label, "focused": focused,
+                "pane_count": 3, "tab_count": 2, "active_tab_id": format!("{id}:t1"), "agent_status": status
+            }))
+            .unwrap()
+        };
+        assert!(fleet.apply(
+            "studio",
+            HostEvent::Workspaces(vec![
+                ws("w4", 2, "railway", "idle", false),
+                ws("w1", 1, "dotfiles", "working", true)
+            ]),
+            T0
+        ));
+        assert!(fleet.apply(
+            "mini",
+            HostEvent::Workspaces(vec![ws("w7", 1, "watch", "blocked", true)]),
+            T0
+        ));
+        let order: Vec<&str> = fleet
+            .workspaces_sorted()
+            .iter()
+            .map(|w| w.id.as_str())
+            .collect();
+        assert_eq!(order, vec!["mini/w7", "studio/w1", "studio/w4"]);
+        assert_eq!(fleet.workspaces["studio/w1"].state, AgentState::Working);
+        assert_eq!(fleet.workspaces["mini/w7"].state, AgentState::Blocked);
+        // Same list again: no change. A shorter list drops the missing one.
+        assert!(!fleet.apply(
+            "studio",
+            HostEvent::Workspaces(vec![
+                ws("w4", 2, "railway", "idle", false),
+                ws("w1", 1, "dotfiles", "working", true)
+            ]),
+            T0 + 1
+        ));
+        assert!(fleet.apply(
+            "studio",
+            HostEvent::Workspaces(vec![ws("w1", 1, "dotfiles", "idle", true)]),
+            T0 + 2
+        ));
+        assert_eq!(fleet.workspaces.len(), 2);
+        assert!(!fleet.apply("studio", HostEvent::WorkspacesChanged, T0 + 3));
     }
 
     #[test]

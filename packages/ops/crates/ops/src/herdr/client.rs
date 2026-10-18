@@ -169,6 +169,11 @@ impl HostClient {
                     continue;
                 }
                 HostEvent::PaneClosed { pane_id } => pane_ids.retain(|id| id != pane_id),
+                // Workspace lists are small; a snapshot is the simplest truth.
+                HostEvent::WorkspacesChanged => {
+                    pane_ids = self.snapshot_and_publish(tx).await?;
+                    continue;
+                }
                 // Follow-up reads that the event stream cannot carry run on
                 // their own task so a slow host never stalls the stream.
                 HostEvent::AgentDetected {
@@ -204,6 +209,12 @@ impl HostClient {
                     panes: snapshot.panes,
                     agents: snapshot.agents,
                 },
+            ))
+            .await;
+        let _ = tx
+            .send((
+                self.name.clone(),
+                HostEvent::Workspaces(snapshot.workspaces),
             ))
             .await;
         Ok(pane_ids)
@@ -266,6 +277,10 @@ impl HostClient {
             Subscription::PaneClosed {},
             Subscription::PaneAgentDetected {},
             Subscription::PaneFocused {},
+            Subscription::WorkspaceCreated {},
+            Subscription::WorkspaceClosed {},
+            Subscription::WorkspaceRenamed {},
+            Subscription::WorkspaceFocused {},
         ];
         subscriptions.extend(
             pane_ids
@@ -365,6 +380,10 @@ pub fn dispatch(frame: Frame) -> Option<HostEvent> {
                 released,
             }),
             EventData::PaneFocused { pane_id, .. } => Some(HostEvent::PaneFocused { pane_id }),
+            EventData::WorkspaceCreated { .. }
+            | EventData::WorkspaceClosed { .. }
+            | EventData::WorkspaceRenamed { .. }
+            | EventData::WorkspaceFocused { .. } => Some(HostEvent::WorkspacesChanged),
             _ => None,
         },
         Frame::Response(_) | Frame::Error(_) | Frame::Unknown(_) => None,
@@ -440,7 +459,8 @@ mod tests {
                 }
                 "session.snapshot" => {
                     json!({"id": id, "result": {"type":"session_snapshot","snapshot":{
-                        "version":"9.9.9","protocol":protocol,"workspaces":[],"tabs":[],"layouts":[],
+                        "version":"9.9.9","protocol":protocol,"tabs":[],"layouts":[],
+                        "workspaces":[{"workspace_id":"w9","number":1,"label":"lcars","focused":true,"pane_count":1,"tab_count":1,"active_tab_id":"w9:t1","agent_status":"idle"}],
                         "panes":[pane_json()],
                         "agents":[]
                     }}})
@@ -569,12 +589,16 @@ mod tests {
                 "pane.closed",
                 "pane.agent_detected",
                 "pane.focused",
+                "workspace.created",
+                "workspace.closed",
+                "workspace.renamed",
+                "workspace.focused",
                 "pane.agent_status_changed"
             ]
         );
-        assert_eq!(subs[4]["pane_id"], "w9:p2");
+        assert_eq!(subs[8]["pane_id"], "w9:p2");
         assert!(
-            subs[4].get("agent_status").is_none(),
+            subs[8].get("agent_status").is_none(),
             "no status filter: {subs:?}"
         );
         let _ = std::fs::remove_file(path);
@@ -711,6 +735,8 @@ mod tests {
             dispatch(released),
             Some(HostEvent::AgentDetected { released: true, .. })
         ));
+        let renamed = parse_frame(r#"{"data":{"type":"workspace_renamed","workspace_id":"w1","label":"new"},"event":"workspace_renamed"}"#).unwrap();
+        assert_eq!(dispatch(renamed), Some(HostEvent::WorkspacesChanged));
         let focused = parse_frame(r#"{"data":{"pane_id":"w1:p2","type":"pane_focused","workspace_id":"w1"},"event":"pane_focused"}"#).unwrap();
         assert_eq!(
             dispatch(focused),

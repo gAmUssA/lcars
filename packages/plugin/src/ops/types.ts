@@ -33,7 +33,20 @@ export type HostStatus = {
   updated_at_ms: number;
 };
 
-export type FleetView = { hosts: HostStatus[]; sessions: Session[] };
+export type Workspace = {
+  /** `<host>/<workspace_id>`. */
+  id: string;
+  host: string;
+  workspace_id: string;
+  number: number;
+  label: string;
+  focused: boolean;
+  pane_count: number;
+  /** Herdr's roll-up of the agents inside. */
+  state: AgentState;
+};
+
+export type FleetView = { hosts: HostStatus[]; sessions: Session[]; workspaces: Workspace[] };
 
 const STATES: ReadonlySet<string> = new Set(["working", "blocked", "done", "idle", "unknown"]);
 
@@ -86,5 +99,20 @@ export function parseFleetView(text: string): FleetView {
       updated_at_ms: typeof s.updated_at_ms === "number" ? s.updated_at_ms : 0,
     };
   });
-  return { hosts, sessions };
+  const workspaces: Workspace[] = (Array.isArray(raw.workspaces) ? raw.workspaces : []).map((w: unknown, i: number) => {
+    if (!isRecord(w) || typeof w.id !== "string" || typeof w.host !== "string" || typeof w.workspace_id !== "string") {
+      throw new Error(`workspaces[${i}] lacks id/host/workspace_id`);
+    }
+    return {
+      id: w.id,
+      host: w.host,
+      workspace_id: w.workspace_id,
+      number: typeof w.number === "number" ? w.number : 0,
+      label: str(w.label) ?? w.workspace_id,
+      focused: w.focused === true,
+      pane_count: typeof w.pane_count === "number" ? w.pane_count : 0,
+      state: typeof w.state === "string" && STATES.has(w.state) ? (w.state as AgentState) : "unknown",
+    };
+  });
+  return { hosts, sessions, workspaces };
 }

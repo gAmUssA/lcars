@@ -25,7 +25,7 @@ Stream Deck XL, agent wall page: one key per agent across both hosts (host tag t
 | 4. Plus dials and touch strip | done |
 | 5. Conn (long-press confirm), done ping | done; Claude Code hooks pending a yes |
 | 6. Remote and global keys | done on the XL; travel profile waits for the small deck |
-| 7. XL status wall | agent wall done, global row and third-party rows planned |
+| 7. XL status wall | done (LCARS rows); third-party usage rows wait for Marketplace installs |
 | 8. Packaging, launchd, install | done (agent load and skill link are explicit steps) |
 
 ## Requirements
@@ -107,6 +107,10 @@ One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most rec
 - **Conn** is a long press (400 ms or more) on an Inbox Key whose agent is `blocked`: Ops presses Enter in that pane, which confirms whatever the agent's dialog has highlighted. A short tap never does this; a long press on a non-blocked key only blinks.
 - **Done ping**: when an agent enters `blocked` or finishes a turn (`working` → `idle`), its key blinks and a system sound plays (Ping for blocked, Glass for done). The first view after a reconnect only primes the baseline. Mute with the **Bell** setting on any Inbox Key.
 
+### Workspace Key
+
+One Herdr workspace per key, ordered by host then Herdr's workspace number. Colour is Herdr's roll-up of the agents inside, the subtitle counts agents, a white ring marks the workspace that host's Herdr is showing. Press switches that host's Herdr to the workspace (`workspace.focus` via Ops) and raises iTerm2.
+
 ### Global keys
 
 | Key | Press |
@@ -131,7 +135,7 @@ The strip is one 800×100 scene sliced per dial. Fleet bar: one block per host c
 
 ### XL agent wall
 
-The XL page "LCARS" holds 24 Inbox Keys in **wall** layout: slot n is the n-th agent across all hosts in Ops's order (blocked first, then most recent), no paging. Row 4 is free for the global keys of milestone 7. New agents appear as soon as Ops sees their first status event; keys beyond the agent count stay black.
+The XL page "LCARS": rows 1–2 are 16 Inbox Keys in **wall** layout (slot n is the n-th agent across all hosts in Ops's order, blocked first, then most recent, no paging), row 3 is eight Workspace Keys, row 4 the global keys. New agents appear as soon as Ops sees their first status event; keys beyond the agent count stay black. Agent Vitals and Claude & Codex Usage keys can take the free slots once those plugins are installed.
 
 ### Travel deck (15-key MK.2)
 

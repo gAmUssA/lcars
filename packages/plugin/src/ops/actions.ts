@@ -11,11 +11,13 @@ export type OpsActions = {
   prompt(sessionId: string, text: string): Promise<void>;
   /** Press Herdr logical keys (`enter`, `esc`, …) in the pane. */
   sendKeys(sessionId: string, keys: string[]): Promise<void>;
+  /** Switch a host's Herdr to the workspace (`host/w1`). */
+  focusWorkspace(workspaceId: string): Promise<void>;
 };
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
-type ActionBody = { action: string; session: string; delta?: number; text?: string; keys?: string[] };
+type ActionBody = { action: string; session?: string; workspace?: string; delta?: number; text?: string; keys?: string[] };
 
 export function createOpsActions(opts: { url: string; token?: () => string | null; fetchImpl?: FetchLike; timeoutMs?: number }): OpsActions {
   const fetchImpl: FetchLike = opts.fetchImpl ?? ((input, init) => fetch(input, init));
@@ -40,7 +42,7 @@ export function createOpsActions(opts: { url: string; token?: () => string | nul
       }
       if (response.ok) return parsed;
       const detail = typeof parsed.error === "string" ? `${response.status}: ${parsed.error}` : `${response.status}`;
-      throw new Error(`ops ${body.action} ${body.session} failed (${detail})`);
+      throw new Error(`ops ${body.action} ${body.session ?? body.workspace} failed (${detail})`);
     } finally {
       clearTimeout(timer);
     }
@@ -59,6 +61,9 @@ export function createOpsActions(opts: { url: string; token?: () => string | nul
     },
     sendKeys: async (sessionId, keys) => {
       await send({ action: "send_keys", session: sessionId, keys });
+    },
+    focusWorkspace: async (workspaceId) => {
+      await send({ action: "focus_workspace", workspace: workspaceId });
     },
   };
 }

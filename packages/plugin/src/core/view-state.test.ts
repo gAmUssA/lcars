@@ -78,6 +78,7 @@ test("focused session prefers the deck's own host", () => {
 
 test("host summaries count states and pick the worst", () => {
   const view: FleetView = {
+    workspaces: [],
     hosts: [
       { name: "studio", local: false, connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 },
       { name: "mini", local: false, connected: false, version: null, protocol: null, error: "down", updated_at_ms: 0 },

@@ -180,6 +180,8 @@ fn log_event(host: &str, event: &HostEvent) {
             info!(host, pane = %a.pane_id, status = ?a.agent_status, done = a.completion_seq == Some(a.state_change_seq) && !a.focused, "agent refreshed")
         }
         HostEvent::PaneFocused { pane_id } => info!(host, pane = %pane_id, "pane focused"),
+        HostEvent::Workspaces(list) => info!(host, workspaces = list.len(), "workspaces"),
+        HostEvent::WorkspacesChanged => info!(host, "workspaces changed"),
     }
 }
 

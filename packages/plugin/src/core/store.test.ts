@@ -12,6 +12,7 @@ function session(id: string, agent: string | null, over: Partial<Session> = {}):
 
 const online = { local: false, connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 };
 const view: FleetView = {
+  workspaces: [],
   hosts: [{ name: "studio", ...online }, { name: "mini", ...online }],
   sessions: [
     session("mini/w7:p1", "claude", { state: "blocked", updated_at_ms: 5 }),
@@ -64,7 +65,7 @@ test("host filter narrows the keys and survives a view update, falls back when t
   expect(store.getState().ui.hostFilter).toBe("studio");
   store.setHostFilter("mini");
   expect(store.sessionAt(0)?.id).toBe("mini/w7:p1");
-  store.setView({ hosts: [view.hosts[0]], sessions: view.sessions.filter((s) => s.host === "studio") });
+  store.setView({ workspaces: [], hosts: [view.hosts[0]], sessions: view.sessions.filter((s) => s.host === "studio") });
   expect(store.getState().ui.hostFilter).toBeNull();
   expect(store.allKeys()).toHaveLength(2);
 });
@@ -72,6 +73,7 @@ test("host filter narrows the keys and survives a view update, falls back when t
 test("paging moves through keys and resets", () => {
   const store = createFleetStore();
   const many: FleetView = {
+    workspaces: [],
     hosts: [],
     sessions: Array.from({ length: 11 }, (_, i) => session(`h/p${i}`, "claude")),
   };
@@ -103,6 +105,7 @@ test("the wall ignores the host filter and the page", () => {
 test("focused session follows the host Ops marks local, whatever the machine name is", () => {
   const store = createFleetStore({ localHost: "mac-studio" });
   const marked: FleetView = {
+    workspaces: [],
     hosts: [{ ...view.hosts[0], local: true }, view.hosts[1]],
     sessions: [session("mini/w7:p1", "claude", { focused: true, state: "blocked" }), session("studio/w1:p1", "codex", { focused: true })],
   };

@@ -2,7 +2,7 @@
 // dials change (host filter, page, strip mode, ticker cursor, effort).
 // Ops already sorts sessions (blocked first, then most recent); the store
 // decides which sessions get a key and which slice is on screen.
-import type { FleetView, Session } from "../ops/types";
+import type { FleetView, Session, Workspace } from "../ops/types";
 import {
   blockedSessions,
   clampPage,
@@ -35,6 +35,8 @@ export type FleetStore = {
   sessionAt(slot: number): Session | null;
   /** Session at an absolute slot over the whole filtered list (wall layout), ignoring paging. */
   sessionAtAbsolute(slot: number): Session | null;
+  /** Workspace at a slot in Ops's order (host, then Herdr number); unfiltered. */
+  workspaceAt(slot: number): Workspace | null;
   /** All keyed sessions regardless of the host filter. */
   allKeys(): Session[];
   movePage(step: number): void;
@@ -101,6 +103,9 @@ export function createFleetStore(opts: { localHost?: string | null } = {}): Flee
     // must not rewrite it.
     sessionAtAbsolute(slot) {
       return all[slot] ?? null;
+    },
+    workspaceAt(slot) {
+      return state.view?.workspaces[slot] ?? null;
     },
     allKeys: () => all,
     movePage(step) {

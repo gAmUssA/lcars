@@ -132,6 +132,40 @@ const LABEL_LINE_HEIGHT = 22;
 /** First title baseline, just under the logo; lines hang from here. */
 const LABEL_FIRST_BASELINE = 84;
 
+export type WorkspaceView = {
+  label: string;
+  state: AgentStatus;
+  agents: number;
+  host: string | null;
+  focused: boolean;
+  live: boolean;
+};
+
+/** Workspace key: state colour, name, agent count, focus ring. */
+export function renderWorkspaceKey(view: WorkspaceView | null): string {
+  if (!view) return renderEmptySvg();
+  const { color } = presentation(view.state);
+  const lines = wrapLabel(view.label, LABEL_CHARS_PER_LINE, 2);
+  const labelSvg = lines
+    .map((line, i) => `<text x="72" y="${64 + i * 22}" font-family="sans-serif" font-size="${LABEL_FONT_PX}" font-weight="bold" fill="#fff" text-anchor="middle">${escapeXml(line)}</text>`)
+    .join("");
+  const agents = view.agents === 1 ? "1 agent" : `${view.agents} agents`;
+  const host = view.host ? `<text x="136" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" fill-opacity="0.8" text-anchor="end">${escapeXml(view.host)}</text>` : "";
+  const ring = view.focused ? `<rect x="4" y="4" width="136" height="136" rx="14" fill="none" stroke="#fff" stroke-width="4"/>` : "";
+  const dim = view.live ? "" : `<rect width="144" height="144" rx="16" fill="#000" fill-opacity="0.6"/>`;
+  return toDataUri(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144">` +
+      `<rect width="144" height="144" rx="16" fill="${color}"/>` +
+      `<text x="10" y="26" font-family="sans-serif" font-size="14" fill="#fff" fill-opacity="0.8" text-anchor="start">WS</text>` +
+      host +
+      labelSvg +
+      `<text x="72" y="122" font-family="sans-serif" font-size="16" fill="#fff" fill-opacity="0.85" text-anchor="middle">${escapeXml(agents)}</text>` +
+      ring +
+      dim +
+      `</svg>`,
+  );
+}
+
 /** A plain utility key: big title, small subtitle, flat colour. */
 export function renderLabelKey(view: { title: string; subtitle: string; color: string }): string {
   return toDataUri(

@@ -42,6 +42,14 @@ test("unknown state strings become unknown, missing optionals become null", () =
   expect(view.sessions[0].seq).toBe(0);
 });
 
+test("workspaces parse when present and default to empty when absent", () => {
+  const view = parseFleetView(JSON.stringify({ hosts: [], sessions: [], workspaces: [{ id: "studio/w1", host: "studio", workspace_id: "w1", number: 1, label: "dotfiles", focused: true, pane_count: 3, state: "working" }] }));
+  expect(view.workspaces).toHaveLength(1);
+  expect(view.workspaces[0].state).toBe("working");
+  expect(parseFleetView(JSON.stringify({ hosts: [], sessions: [] })).workspaces).toEqual([]);
+  expect(() => parseFleetView(JSON.stringify({ hosts: [], sessions: [], workspaces: [{ id: "x" }] }))).toThrow(/workspaces\[0\]/);
+});
+
 test("rejects shapes that are not a FleetView", () => {
   expect(() => parseFleetView("{}")).toThrow(/FleetView/);
   expect(() => parseFleetView("[]")).toThrow(/FleetView/);

@@ -28,6 +28,7 @@ test("scene reflects the store: hosts from the full list, blocked from the filte
   const store = createFleetStore({ localHost: "studio" });
   const online = { local: false, connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 };
   const view: FleetView = {
+    workspaces: [],
     hosts: [{ name: "studio", ...online }, { name: "mini", ...online }],
     sessions: [session("mini/w7:p1", { state: "blocked" }), session("studio/w1:p1", { state: "working" })],
   };

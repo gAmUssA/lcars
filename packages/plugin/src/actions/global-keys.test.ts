@@ -25,10 +25,10 @@ test("busy sessions are the working and blocked ones", () => {
 
 test("stop all needs two presses and then interrupts every busy agent", async () => {
   const store = createFleetStore();
-  const view: FleetView = { hosts: [], sessions: [s("h/p1", "working"), s("h/p2", "idle"), s("h/p3", "blocked")] };
+  const view: FleetView = { workspaces: [], hosts: [], sessions: [s("h/p1", "working"), s("h/p2", "idle"), s("h/p3", "blocked")] };
   store.setView(view);
   const sent: [string, string[]][] = [];
-  const ops = { focus: async () => {}, scroll: async () => 0, prompt: async () => {}, sendKeys: async (id: string, keys: string[]) => { sent.push([id, keys]); } };
+  const ops = { focus: async () => {}, scroll: async () => 0, prompt: async () => {}, sendKeys: async (id: string, keys: string[]) => { sent.push([id, keys]); }, focusWorkspace: async () => {} };
   let t = 0;
   const action = new StopAllAction(store, ops, () => t);
   const ev = { action: { showAlert: async () => {} } } as never;
