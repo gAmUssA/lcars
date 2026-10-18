@@ -26,7 +26,7 @@ Stream Deck XL, agent wall page: one key per agent across both hosts (host tag t
 | 5. Conn (long-press confirm), done ping | done; Claude Code hooks pending a yes |
 | 6. Remote and global keys | done on the XL; travel profile waits for the small deck |
 | 7. XL status wall | agent wall done, global row and third-party rows planned |
-| 8. Packaging, launchd, install | planned |
+| 8. Packaging, launchd, install | done (agent load and skill link are explicit steps) |
 
 ## Requirements
 
@@ -34,6 +34,23 @@ Stream Deck XL, agent wall page: one key per agent across both hosts (host tag t
 - [Herdr](https://herdr.dev) 0.9.x on every host (protocol 22)
 - Rust 1.99+ (`cargo`), Node 20.5+, `npm i -g @elgato/cli` for linking the plugin
 - Remote hosts: SSH alias in `~/.ssh/config`, reachable over Tailscale
+
+## Install
+
+From a fresh clone on the Mac the decks are plugged into:
+
+```sh
+make build            # cargo build --release + npm ci + plugin bundle
+make install          # ~/.local/bin/ops, ~/.config/ops/ops.toml (if absent), launchd plist (not loaded)
+$EDITOR ~/.config/ops/ops.toml   # one [[hosts]] block per machine
+ssh -fNM -o ControlPath=~/.ssh/cm-<alias> -o ControlPersist=8h <alias>   # once per remote host, after login
+make start            # loads io.gamov.lcars.ops: runs now and at every login
+make pack             # packages/plugin/dist/io.gamov.lcars.streamDeckPlugin, double-click to install
+```
+
+`make status`, `make stop`, `make restart`, `make uninstall` manage the agent; Ops logs to `~/Library/Logs/lcars/ops.log`. `make install-skill` links the `lcars` Claude Code skill (`packages/skill/lcars`) into `~/.claude/skills` so an agent can re-author deck pages later.
+
+Then lay out the decks in the Stream Deck app from the **LCARS** category, or let the skill write pages for you. macOS asks once for Automation consent the first time a key drives iTerm2.
 
 ## Build
 

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Rendered by scripts/install.sh; __HOME__ is replaced with the user's home. -->
+  <key>Label</key>
+  <string>io.gamov.lcars.ops</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>__HOME__/.local/bin/ops</string>
+    <string>--config</string>
+    <string>__HOME__/.config/ops/ops.toml</string>
+  </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- ssh, herdr and mosh live outside launchd's default PATH. -->
+    <key>PATH</key>
+    <string>__HOME__/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    <key>HOME</key>
+    <string>__HOME__</string>
+    <key>RUST_LOG</key>
+    <string>ops=info</string>
+  </dict>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>ThrottleInterval</key>
+  <integer>5</integer>
+  <key>StandardOutPath</key>
+  <string>__HOME__/Library/Logs/lcars/ops.log</string>
+  <key>StandardErrorPath</key>
+  <string>__HOME__/Library/Logs/lcars/ops.log</string>
+</dict>
+</plist>
