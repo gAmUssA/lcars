@@ -48,7 +48,9 @@ make start            # loads io.gamov.lcars.ops: runs now and at every login
 make pack             # packages/plugin/dist/io.gamov.lcars.streamDeckPlugin, double-click to install
 ```
 
-`make status`, `make stop`, `make restart`, `make uninstall` manage the agent; Ops logs to `~/Library/Logs/lcars/ops.log`. `make install-skill` links the `lcars` Claude Code skill (`packages/skill/lcars`) into `~/.claude/skills` so an agent can re-author deck pages later.
+`make status`, `make stop`, `make restart`, `make uninstall` manage the agent; Ops logs to `~/Library/Logs/lcars/ops.log`. `make install-skill` links the `lcars` Claude Code skill into `~/.claude/skills` so an agent can re-author deck pages later; see [docs/skill-install.md](docs/skill-install.md).
+
+Prebuilt artifacts: every push to `main` uploads `ops-macos-arm64` and `io.gamov.lcars.streamDeckPlugin` as workflow artifacts (Actions › CI), and a `vX.Y.Z` tag publishes them as a GitHub Release with checksums.
 
 Then lay out the decks in the Stream Deck app from the **LCARS** category, or let the skill write pages for you. macOS asks once for Automation consent the first time a key drives iTerm2.
 
