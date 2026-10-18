@@ -24,18 +24,56 @@ export function escapeXml(value: string): string {
   return value.replace(/[<>&'"]/g, (c) => map[c] ?? c);
 }
 
-// Wrap a label into up to maxLines lines of perLine chars; the last line is
-// ellipsised if the text still overflows.
+// Wrap a label into up to maxLines lines of at most perLine chars, breaking
+// at spaces when a word fits and inside a word only when it is longer than a
+// line. The last line is ellipsised if text remains.
 export function wrapLabel(label: string, perLine: number, maxLines: number): string[] {
+  const words = label.trim().split(/\s+/).filter(Boolean);
   const lines: string[] = [];
-  let rest = label;
-  while (rest.length > perLine && lines.length < maxLines - 1) {
-    lines.push(rest.slice(0, perLine));
-    rest = rest.slice(perLine);
+  let current = "";
+  let overflow = false;
+  const flush = (): boolean => {
+    if (lines.length === maxLines) return false;
+    lines.push(current);
+    current = "";
+    return true;
+  };
+  for (let i = 0; i < words.length && !overflow; i++) {
+    let word = words[i];
+    if (current && current.length + 1 + word.length <= perLine) {
+      current = `${current} ${word}`;
+      continue;
+    }
+    if (current && !flush()) {
+      overflow = true;
+      break;
+    }
+    while (word.length > perLine) {
+      current = word.slice(0, perLine);
+      word = word.slice(perLine);
+      if (lines.length === maxLines - 1) {
+        overflow = true;
+        break;
+      }
+      flush();
+    }
+    if (overflow) {
+      current = `${current.slice(0, perLine - 1)}…`;
+      lines.push(current);
+      return lines;
+    }
+    current = word;
+    if (i === words.length - 1) flush();
+    else if (lines.length === maxLines) overflow = true;
   }
-  if (rest.length > perLine) rest = `${rest.slice(0, perLine - 1)}…`;
-  lines.push(rest);
-  return lines;
+  if (overflow || (current && lines.length === maxLines)) {
+    const last = lines.length === maxLines ? lines.pop()! : current;
+    const cut = last.length >= perLine ? last.slice(0, perLine - 1) : last;
+    lines.push(`${cut}…`);
+    return lines;
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [""];
 }
 
 // Short 2-letter code per known herdr agent integration; falls back to the
@@ -86,16 +124,22 @@ export function renderOfflineSvg(): string {
   );
 }
 
+/** Label typography: three lines of up to 11 characters at 19 px, natural width. */
+export const LABEL_CHARS_PER_LINE = 11;
+export const LABEL_LINES = 3;
+export const LABEL_FONT_PX = 19;
+const LABEL_LINE_HEIGHT = 22;
+const LABEL_LAST_BASELINE = 130;
+
 export function renderKeySvg(view: KeyView | null): string {
   if (!view) return renderEmptySvg();
   const { color, glyph } = presentation(view.status);
-  const lines = wrapLabel(view.label, 8, 3);
-  const firstY = 102 - (lines.length - 1) * 15;
+  const lines = wrapLabel(view.label, LABEL_CHARS_PER_LINE, LABEL_LINES);
+  const firstY = LABEL_LAST_BASELINE - (lines.length - 1) * LABEL_LINE_HEIGHT;
   const labelSvg = lines
     .map((line, i) => {
-      const y = firstY + i * 30;
-      const fit = line.length >= 4 ? ` textLength="142" lengthAdjust="spacingAndGlyphs"` : "";
-      return `<text x="72" y="${y}"${fit} font-family="sans-serif" font-size="26" fill="#fff" text-anchor="middle">${escapeXml(line)}</text>`;
+      const y = firstY + i * LABEL_LINE_HEIGHT;
+      return `<text x="72" y="${y}" font-family="sans-serif" font-size="${LABEL_FONT_PX}" fill="#fff" text-anchor="middle">${escapeXml(line)}</text>`;
     })
     .join("");
   const host = view.host
