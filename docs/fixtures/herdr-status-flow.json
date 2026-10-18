@@ -1,0 +1,238 @@
+[
+ {
+  "t": 0.105,
+  "tag": "C-broad",
+  "frame": "{\"id\":\"lcars-C-broad\",\"result\":{\"type\":\"subscription_started\"}}"
+ },
+ {
+  "t": 0.105,
+  "tag": "B-nofilter-status",
+  "frame": "{\"id\":\"lcars-B-nofilter-status\",\"error\":{\"code\":\"invalid_request\",\"message\":\"invalid request: missing field `pane_id` at line 1 column 133\"}}"
+ },
+ {
+  "t": 0.105,
+  "tag": "B-nofilter-status",
+  "frame": "<EOF>"
+ },
+ {
+  "t": 0.538,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "split",
+    "--current",
+    "--direction",
+    "down",
+    "--ratio",
+    "0.2",
+    "--no-focus"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:split\",\"result\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/Users/vikgamov/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/vikgamov/projects/lcars\",\"pane_id\":\"w9:p2\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1eb7e7612916\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 0.538,
+  "tag": "note",
+  "frame": "test pane = w9:p2"
+ },
+ {
+  "t": 0.543,
+  "tag": "D-filtered-status-blocked-only",
+  "frame": "{\"id\":\"lcars-D-filtered-status-blocked-only\",\"result\":{\"type\":\"subscription_started\"}}"
+ },
+ {
+  "t": 0.543,
+  "tag": "A-filtered-status",
+  "frame": "{\"id\":\"lcars-A-filtered-status\",\"result\":{\"type\":\"subscription_started\"}}"
+ },
+ {
+  "t": 0.622,
+  "tag": "C-broad",
+  "frame": "{\"data\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/Users/vikgamov/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/vikgamov/projects/lcars\",\"pane_id\":\"w9:p2\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1eb7e7612916\",\"workspace_id\":\"w9\"},\"type\":\"pane_created\"},\"event\":\"pane_created\"}"
+ },
+ {
+  "t": 1.061,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "report-agent",
+    "w9:p2",
+    "--source",
+    "lcars-recon",
+    "--agent",
+    "lcars-test",
+    "--state",
+    "working",
+    "--message",
+    "lcars recon: working"
+   ],
+   "rc": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 1.143,
+  "tag": "C-broad",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"pane_id\":\"w9:p2\",\"type\":\"pane_agent_detected\",\"workspace_id\":\"w9\"},\"event\":\"pane_agent_detected\"}"
+ },
+ {
+  "t": 1.143,
+  "tag": "C-broad",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"final_status\":\"unknown\",\"pane_id\":\"w9:p2\",\"released\":true,\"type\":\"pane_agent_detected\",\"workspace_id\":\"w9\"},\"event\":\"pane_agent_detected\"}"
+ },
+ {
+  "t": 1.16,
+  "tag": "A-filtered-status",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"agent_status\":\"working\",\"pane_id\":\"w9:p2\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 1.16,
+  "tag": "A-filtered-status",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"agent_status\":\"unknown\",\"pane_id\":\"w9:p2\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 1.679,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "report-agent",
+    "w9:p2",
+    "--source",
+    "lcars-recon",
+    "--agent",
+    "lcars-test",
+    "--state",
+    "blocked",
+    "--message",
+    "lcars recon: approve?"
+   ],
+   "rc": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 1.68,
+  "tag": "A-filtered-status",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"agent_status\":\"blocked\",\"pane_id\":\"w9:p2\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 1.691,
+  "tag": "D-filtered-status-blocked-only",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"agent_status\":\"blocked\",\"pane_id\":\"w9:p2\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 1.765,
+  "tag": "C-broad",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"pane_id\":\"w9:p2\",\"type\":\"pane_agent_detected\",\"workspace_id\":\"w9\"},\"event\":\"pane_agent_detected\"}"
+ },
+ {
+  "t": 2.182,
+  "tag": "C-broad",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"final_status\":\"unknown\",\"pane_id\":\"w9:p2\",\"released\":true,\"type\":\"pane_agent_detected\",\"workspace_id\":\"w9\"},\"event\":\"pane_agent_detected\"}"
+ },
+ {
+  "t": 2.194,
+  "tag": "A-filtered-status",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"agent_status\":\"unknown\",\"pane_id\":\"w9:p2\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 2.29,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "report-agent",
+    "w9:p2",
+    "--source",
+    "lcars-recon",
+    "--agent",
+    "lcars-test",
+    "--state",
+    "idle",
+    "--message",
+    "lcars recon: idle"
+   ],
+   "rc": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 2.298,
+  "tag": "A-filtered-status",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"agent_status\":\"idle\",\"pane_id\":\"w9:p2\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 2.391,
+  "tag": "C-broad",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"pane_id\":\"w9:p2\",\"type\":\"pane_agent_detected\",\"workspace_id\":\"w9\"},\"event\":\"pane_agent_detected\"}"
+ },
+ {
+  "t": 2.913,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "get",
+    "w9:p2"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"agent\":\"lcars-test\",\"agent_status\":\"idle\",\"cwd\":\"/Users/vikgamov/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/vikgamov/projects/lcars\",\"pane_id\":\"w9:p2\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1eb7e7612916\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 2.928,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "release-agent",
+    "w9:p2",
+    "--source",
+    "lcars-recon",
+    "--agent",
+    "lcars-test"
+   ],
+   "rc": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 3.012,
+  "tag": "C-broad",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"final_status\":\"unknown\",\"pane_id\":\"w9:p2\",\"released\":true,\"type\":\"pane_agent_detected\",\"workspace_id\":\"w9\"},\"event\":\"pane_agent_detected\"}"
+ },
+ {
+  "t": 3.027,
+  "tag": "A-filtered-status",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"agent_status\":\"unknown\",\"pane_id\":\"w9:p2\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 3.559,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "close",
+    "w9:p2"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:close\",\"result\":{\"type\":\"ok\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 3.633,
+  "tag": "C-broad",
+  "frame": "{\"data\":{\"pane_id\":\"w9:p2\",\"type\":\"pane_closed\",\"workspace_id\":\"w9\"},\"event\":\"pane_closed\"}"
+ }
+]

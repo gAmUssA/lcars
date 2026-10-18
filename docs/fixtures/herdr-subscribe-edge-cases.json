@@ -1,0 +1,133 @@
+[
+ {
+  "t": 0.0,
+  "tag": "F-null-status",
+  "frame": "{\"id\":\"lcars-F-null-status\",\"result\":{\"type\":\"subscription_started\"}}"
+ },
+ {
+  "t": 0.106,
+  "tag": "E-bogus-pane",
+  "frame": "{\"id\":\"lcars-E-bogus-pane\",\"error\":{\"code\":\"pane_not_found\",\"message\":\"pane w999:p999 not found\"}}"
+ },
+ {
+  "t": 0.106,
+  "tag": "E-bogus-pane",
+  "frame": "<EOF>"
+ },
+ {
+  "t": 0.437,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "split",
+    "--current",
+    "--direction",
+    "down",
+    "--ratio",
+    "0.2",
+    "--no-focus"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:split\",\"result\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/Users/vikgamov/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/vikgamov/projects/lcars\",\"pane_id\":\"w9:p3\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":37},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e1ebb121c4c17\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 0.437,
+  "tag": "note",
+  "frame": "test pane = w9:p3"
+ },
+ {
+  "t": 0.446,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "list"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:list\",\"result\":{\"panes\":[{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"b7e47a76-b08f-4b38-9b2e-58589260770a\"},\"agent_status\":\"idle\",\"cwd\":\"/Users/vikgamov/projects/dotfiles\",\"focused\":false,\"foreground_cwd\":\"/Users/vikgamov/projects/dotfiles\",\"pane_id\":\"w1:p1\",\"revision\":15,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":49},\"tab_id\":\"w1:t1\",\"terminal_id\":\"term_65dbf28aa5a8f1\",\"terminal_title\":\"\u2733 Computer setup\",\"terminal_title_stripped\":\"Computer setup\",\"tokens\":{\"model\":\"opus-5-5\",\"summary\":\"why fz",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 0.446,
+  "tag": "note",
+  "frame": "G subscribes to 14 panes: ['w1:p1', 'w1:p2', 'w1:p3', 'w4:p1', 'w4:p2', 'w4:p3', 'w5:p7', 'w5:p5', 'w5:p4', 'w5:p2', 'w5:pA', 'w5:p9', 'w9:p1', 'w9:p3']"
+ },
+ {
+  "t": 0.448,
+  "tag": "G-multi-pane-one-conn",
+  "frame": "{\"id\":\"lcars-G-multi-pane-one-conn\",\"result\":{\"type\":\"subscription_started\"}}"
+ },
+ {
+  "t": 0.869,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "report-agent",
+    "w9:p3",
+    "--source",
+    "lcars-recon",
+    "--agent",
+    "lcars-test",
+    "--state",
+    "blocked",
+    "--message",
+    "lcars recon: approve?"
+   ],
+   "rc": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 0.874,
+  "tag": "G-multi-pane-one-conn",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"agent_status\":\"blocked\",\"pane_id\":\"w9:p3\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 1.084,
+  "tag": "G-multi-pane-one-conn",
+  "frame": "{\"data\":{\"agent\":\"lcars-test\",\"agent_status\":\"unknown\",\"pane_id\":\"w9:p3\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 1.677,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "release-agent",
+    "w9:p3",
+    "--source",
+    "lcars-recon",
+    "--agent",
+    "lcars-test"
+   ],
+   "rc": 0,
+   "stdout": "",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 2.223,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "close",
+    "w9:p3"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:close\",\"result\":{\"type\":\"ok\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 2.235,
+  "tag": "G-multi-pane-one-conn",
+  "frame": "{\"data\":{\"pane_id\":\"w9:p3\",\"type\":\"pane_closed\",\"workspace_id\":\"w9\"},\"event\":\"pane_closed\"}"
+ }
+]
