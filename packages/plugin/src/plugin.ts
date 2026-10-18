@@ -8,9 +8,8 @@ import { AttachAction, DictateAction, MuteBellAction, StopAllAction } from "./ac
 import { InboxKeyAction } from "./actions/inbox-key";
 import { createOsa } from "./os/iterm";
 import { createFleetStore } from "./core/store";
-import { detectFlips } from "./core/transitions";
+import { advance, EMPTY_BASELINE, type Baseline } from "./core/ping-baseline";
 import { createBell } from "./os/bell";
-import type { Session } from "./ops/types";
 import { createOpsActions, type OpsActions } from "./ops/actions";
 import { createOpsClient, DEFAULT_OPS_URL, type OpsClient } from "./ops/client";
 import { defaultTokenPath, readToken } from "./ops/token";
@@ -57,34 +56,22 @@ const globals = [new AttachAction(osa), stopAll, new DictateAction(osa), muteBel
 // Done ping: compare consecutive healthy views. The first view after a
 // (re)connect only primes the baseline, so a reconnect never pings for
 // agents that were already blocked.
-let previous: Session[] | null = null;
-let hostsUp = new Set<string>();
+let baseline: Baseline = EMPTY_BASELINE;
 store.subscribe((state) => {
   inbox.renderAll();
   for (const dial of dials) dial.renderAll();
   stopAll.renderAll();
   if (!state.healthy) {
-    previous = null;
-    hostsUp = new Set();
+    baseline = EMPTY_BASELINE;
     return;
   }
-  const current = store.allKeys();
-  // A host that just (re)connected delivers its whole backlog in one frame:
-  // seed the baseline with it so already-blocked agents do not ping.
-  const nowUp = new Set((state.view?.hosts ?? []).filter((h) => h.connected).map((h) => h.name));
-  if (previous !== null) {
-    const fresh = current.filter((s) => nowUp.has(s.host) && !hostsUp.has(s.host));
-    if (fresh.length > 0) previous = [...previous, ...fresh];
+  const { next, flips } = advance(baseline, state.view, store.allKeys());
+  baseline = next;
+  for (const flip of flips) {
+    streamDeck.logger.info(`ping: ${flip.session.id} ${flip.kind}`);
+    inbox.flash(flip.session.id);
+    bell.play(flip.kind);
   }
-  hostsUp = nowUp;
-  if (previous !== null) {
-    for (const flip of detectFlips(previous, current)) {
-      streamDeck.logger.info(`ping: ${flip.session.id} ${flip.kind}`);
-      inbox.flash(flip.session.id);
-      bell.play(flip.kind);
-    }
-  }
-  previous = current;
 });
 
 const applyConnection = (settings: GlobalSettings): void => {

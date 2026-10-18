@@ -191,3 +191,23 @@ Suggested fix: `chmod 644` the plist after `sed`. `xattr -d com.apple.quarantine
 - The plugin WebSocket client resets its own backoff on `open`, ignores a malformed payload, and clears the ping baseline when Ops drops. Stable `blocked` does not ping again. Unseen `idle` does not ping.
 - Paging clamps, resets to page 0 when the host filter changes, and the wall ignores the page index. A vanished filter host falls back to all hosts.
 - The installer does not load the agent, keeps an existing `ops.toml`, and fails clearly when the binary is missing.
+
+## Verification pass
+
+Checked the tree at `1ec5eb0`, which contains `39359b3` ("Fix the adversarial review findings"). `cargo test` in `packages/ops`: 53 passed (lib), 5 passed (bin), 0 doc-tests; 58 passed, 0 failed. `npm test` in `packages/plugin`: 81 passed (17 files), 0 failed.
+
+#1 — fixed
+#2 — fixed
+#3 — fixed
+#4 — fixed
+#5 — fixed
+#6 — fixed
+#7 — fixed
+#8 — partially fixed: a failed health ping unlinks the forward (`reset`) so the next connect cancels and re-forwards, and `agent.get` no longer runs on the read loop. The event read still has no timeout; the ping fires every 30s and then waits up to 10s, so a forward that accepts and answers ping leaves the host `connected` with a frozen fleet, and a forward that accepts and then stalls is noticed about 40s after the snapshot.
+#9 — fixed
+#10 — partially fixed: the baseline is seeded with a host's sessions on the frame where `connected` flips to true, then replaced with that frame's list. Ops publishes `Connected` with no sessions and the snapshot after that, so the host is already counted as up when the blocked agents arrive and they still ping.
+#11 — fixed
+#12 — fixed
+#13 — not fixed: `subscribe` is still `pane.created`, `pane.closed`, `pane.agent_detected`, `pane.focused`, and per-pane status only (`client.rs` 264–276). A title change while `working` still waits for idle `agent.get` or the next snapshot.
+#14 — fixed
+#15 — fixed
