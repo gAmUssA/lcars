@@ -1,0 +1,27 @@
+# Ops configuration. Copy to ~/.config/ops/ops.toml and edit.
+#
+# Ops holds one Herdr socket connection per host listed here, merges the
+# streams into one session list, and serves it on `listen` for the LCARS
+# Stream Deck plugin (GET /sessions, WebSocket /ws).
+
+# Local address the plugin connects to. Loopback only; Ops never listens on a
+# network interface.
+listen = "127.0.0.1:7677"
+
+# Local host: connect straight to the Herdr socket on this machine.
+[[hosts]]
+name = "daystrom"
+socket = "~/.config/herdr/herdr.sock"
+
+# Remote host over SSH. Ops never authenticates itself; it rides an SSH
+# ControlMaster you open after login (1Password owns the keys):
+#
+#   ssh -fNM -o ControlPath=~/.ssh/cm-ds9 -o ControlPersist=8h ds9
+#
+# `ssh` is an alias from ~/.ssh/config. `remote_socket` must be absolute; the
+# remote side cannot expand `~`. `control_path` defaults to ~/.ssh/cm-<ssh>.
+[[hosts]]
+name = "ds9"
+ssh = "ds9"
+remote_socket = "/Users/vikgamov/.config/herdr/herdr.sock"
+control_path = "~/.ssh/cm-ds9"

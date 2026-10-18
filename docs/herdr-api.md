@@ -38,7 +38,7 @@ Conclusion: `herdr-compat` is usable as-is for protocol 22 / 0.9.4. Ops should s
 - Request: `{"id": "<string>", "method": "<dotted.name>", "params": {...}}`. `id` and `method` required; `params` is required by schema even when empty (`{}`).
 - Success: `{"id": "...", "result": {"type": "<snake_case_result>", ...}}`.
 - Error: `{"id": "...", "error": {"code": "<snake_case>", "message": "..."}}`. After an error on a subscribe request the server closes the connection (EOF observed).
-- Plain requests may open a fresh connection per call (herdr-compat does). A subscription holds the connection open and pushes event frames on it after the ack.
+- **One request per connection.** The server closes the socket after each response; a second request on the same connection fails with `Broken pipe` (tested 2026-10-18). A successful `events.subscribe` is the exception: the connection stays open and pushes event frames after the ack.
 - Response `id`s from the CLI look like `cli:agent:list`; choose a distinct prefix (`ops:<host>:<n>`) so frames are attributable in logs.
 
 ## Methods Ops will use

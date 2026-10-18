@@ -15,3 +15,21 @@ Recon notes on the Herdr socket API, with recorded frames as test fixtures: [doc
 cd packages/ops && cargo build && cargo test
 cd packages/plugin && npm ci && npm run typecheck && npm test
 ```
+
+## Run Ops
+
+```sh
+cd packages/ops
+mkdir -p ~/.config/ops && cargo run -q -- --print-default-config > ~/.config/ops/ops.toml
+# edit hosts, then:
+cargo run -q
+curl -s http://127.0.0.1:7677/sessions | jq .
+```
+
+Remote hosts ride an SSH ControlMaster you open once after login (1Password holds the keys, Ops never prompts):
+
+```sh
+ssh -fNM -o ControlPath=~/.ssh/cm-ds9 -o ControlPersist=8h ds9
+```
+
+Ops logs to stdout; `RUST_LOG=ops=debug` for the subscription detail. Design record: [docs/adr/0001-ops-architecture.md](docs/adr/0001-ops-architecture.md).
