@@ -1,6 +1,6 @@
 # LCARS
 
-Stream Deck console for coding agents, backed by Herdr. The full design, decisions and build plan live in [docs/HANDOFF.md](docs/HANDOFF.md). Agent rules for this repo are in [CLAUDE.md](CLAUDE.md).
+Stream Deck console for coding agents, backed by [Herdr](https://herdr.dev). The full design, decisions and build plan live in [docs/HANDOFF.md](docs/HANDOFF.md). Agent rules for this repo are in [CLAUDE.md](CLAUDE.md).
 
 | Package | What | Stack |
 | --- | --- | --- |
@@ -8,6 +8,26 @@ Stream Deck console for coding agents, backed by Herdr. The full design, decisio
 | `packages/plugin` | LCARS, the Stream Deck plugin. Paints keys, dials and the touch strip; forwards presses to Ops | TypeScript, `@elgato/streamdeck` |
 
 Recon notes on the Herdr socket API, with recorded frames as test fixtures: [docs/herdr-api.md](docs/herdr-api.md).
+
+## Status
+
+| Milestone | State |
+| --- | --- |
+| 1. Recon of the Herdr socket API | done |
+| 2. Ops v0: per-host event subscriptions, merged `FleetView`, loopback HTTP + WebSocket | done |
+| 3. Plugin v0: Inbox Key on the Stream Deck +, tap focuses the pane | done |
+| 4. Plus dials and touch strip | next |
+| 5. Claude Code hooks, Conn (long-press approve), done ping | planned |
+| 6. Remote keys and travel profile | planned |
+| 7. XL status wall | planned |
+| 8. Packaging, launchd, install | planned |
+
+## Requirements
+
+- macOS, Stream Deck app 7.1+ (developed on 7.6), a Stream Deck + or XL
+- [Herdr](https://herdr.dev) 0.9.x on every host (protocol 22)
+- Rust 1.99+ (`cargo`), Node 20.5+, `npm i -g @elgato/cli` for linking the plugin
+- Remote hosts: SSH alias in `~/.ssh/config`, reachable over Tailscale
 
 ## Build
 
@@ -53,3 +73,7 @@ One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most rec
 ### Deck layout
 
 The Plus page "LCARS" (8 Inbox Keys, slots 1–8) was written with [streamdeck-mcp](https://github.com/verygoodplugins/streamdeck-mcp)'s profile manager, which edits Elgato's `ProfilesV3` files directly and must quit and relaunch the Stream Deck app around the write. Reproducible profile generation from a spec is milestone 7.
+
+## License
+
+[MIT](LICENSE). Third-party notices for the plugin are in [packages/plugin/THIRD_PARTY_NOTICES.md](packages/plugin/THIRD_PARTY_NOTICES.md).
