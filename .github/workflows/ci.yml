@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # Renewal: Dependabot does not see npm -g installs; bump by hand when
+  # packages/plugin/README or the Stream Deck SDK moves. Checked 2026-10-18.
+  ELGATO_CLI_VERSION: 1.10.2
+
+jobs:
+  test:
+    name: Rust + TypeScript tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: packages/ops
+      - name: Ops format, lint, test
+        working-directory: packages/ops
+        run: |
+          cargo fmt --check
+          cargo clippy --all-targets -- -D warnings
+          cargo test
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: packages/plugin/package-lock.json
+      - name: Plugin typecheck, test, bundle
+        working-directory: packages/plugin
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+          npm run build
+
+  package:
+    name: Package (macOS)
+    runs-on: macos-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: packages/ops
+      - name: Shell harnesses (plutil is macOS-only)
+        run: scripts/run-tests.sh
+      - name: Ops release binary
+        working-directory: packages/ops
+        run: |
+          cargo build --release
+          ./target/release/ops --help | head -1
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: packages/plugin/package-lock.json
+      - name: Plugin bundle and .streamDeckPlugin
+        working-directory: packages/plugin
+        run: |
+          npm ci
+          npm run build
+          npm install -g "@elgato/cli@${ELGATO_CLI_VERSION}"
+          mkdir -p dist
+          streamdeck pack io.gamov.lcars.sdPlugin -f -o dist
+          ls -la dist
+      - name: Install script dry run into a scratch home
+        run: |
+          scripts/install.sh --home "$RUNNER_TEMP/home" --binary packages/ops/target/release/ops
+          test -x "$RUNNER_TEMP/home/.local/bin/ops"
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: ops-macos-arm64
+          path: packages/ops/target/release/ops
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7.0.2
+        with:
+          name: io.gamov.lcars.streamDeckPlugin
+          path: packages/plugin/dist/io.gamov.lcars.streamDeckPlugin
+          if-no-files-found: error

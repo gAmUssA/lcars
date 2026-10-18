@@ -1,0 +1,61 @@
+name: Release
+
+# Tag `vX.Y.Z` on main to publish a GitHub Release carrying the Ops binary
+# (macOS arm64), the .streamDeckPlugin installer and the install script.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  # Renewal: bump by hand together with ci.yml. Checked 2026-10-18.
+  ELGATO_CLI_VERSION: 1.10.2
+
+jobs:
+  release:
+    name: Build and publish
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2.9.2
+        with:
+          workspaces: packages/ops
+      - name: Tests
+        run: |
+          (cd packages/ops && cargo test)
+          scripts/run-tests.sh
+      - name: Ops release binary
+        working-directory: packages/ops
+        run: cargo build --release
+      - uses: actions/setup-node@v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: packages/plugin/package-lock.json
+      - name: Plugin tests and installer
+        working-directory: packages/plugin
+        run: |
+          npm ci
+          npm test
+          npm run build
+          npm install -g "@elgato/cli@${ELGATO_CLI_VERSION}"
+          mkdir -p dist
+          streamdeck pack io.gamov.lcars.sdPlugin -f -o dist
+      - name: Stage assets
+        run: |
+          mkdir -p release
+          cp packages/ops/target/release/ops "release/ops-${GITHUB_REF_NAME}-macos-arm64"
+          cp packages/plugin/dist/io.gamov.lcars.streamDeckPlugin release/
+          cp scripts/install.sh release/
+          cp packages/ops/launchd/io.gamov.lcars.ops.plist.template release/
+          shasum -a 256 release/* > release/SHA256SUMS
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/* \
+            --title "LCARS $GITHUB_REF_NAME" \
+            --generate-notes
