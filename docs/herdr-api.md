@@ -152,6 +152,18 @@ Live AgentInfo sample (from `herdr agent list`, this session's pane while workin
 {"id":"ops:mini:1","result":{"type":"pong","version":"0.9.0","protocol":22,"capabilities":{"live_handoff":true,"detached_server_daemon":true,"endpoint_protocol_generation":1,"surface_interest":true,"health_check":true}}}
 ```
 
+## Real Claude Code recordings (2026-10-18, Herdr 0.9.4, Claude Code 2.1.302)
+
+Three scratch sessions started with `herdr agent start … --kind claude` in a pane split from this one; fixtures in `docs/fixtures/claude-*.json` (same `{t, tag, frame}` shape, CLI records included).
+
+- `claude-trust-dialog-flow.json`: a new, untrusted folder blocks **during startup** (`agent start` returns `agent_not_ready`, `launch_pending: true`). The dialog's highlighted default is "No, exit", so Enter ends the session. Conn therefore means "confirm the highlighted option", never "approve".
+- `claude-turn-flow.json`: in auto permission mode Bash never prompts; a full turn is `working` → `idle` and afterwards `agent.get` shows `completion_seq == state_change_seq`. The event stream says `idle`, not `done`; `done` is a seen-state the server derives for focus-aware clients.
+- `claude-question-flow.json`: `AskUserQuestion` produces a genuine `blocked`. Ops `send_keys ["enter"]` selected the highlighted option, Claude went `working` then `idle`.
+
+What the events carry: `pane.agent_status_changed` had only `agent`, `agent_status`, `pane_id`, `workspace_id` in every recording. No `title`, `state_labels` or `display_agent`, and `agent.get` showed `state_labels: {}` while blocked. The dialog text exists only in `agent.read --source visible`. A pending-prompt ticker therefore needs either a read on demand or Claude Code hooks.
+
+Codex was not recorded (would spend Vik's quota for a second agent); its approval UI is assumed to confirm on Enter as well.
+
 ## Open items for milestone 2
 
 - Arch Mini deferred (Vik, 2026-10-18). Laptop (`laptop` on the tailnet) runs its own Ops in travel mode; no inbound connection planned. Whether `--machine` forwarding carries `events.subscribe` is still untested and no longer needed.

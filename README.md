@@ -23,7 +23,7 @@ Stream Deck XL, agent wall page: one key per agent across both hosts (host tag t
 | 2. Ops v0: per-host event subscriptions, merged `FleetView`, loopback HTTP + WebSocket | done |
 | 3. Plugin v0: Inbox Key on the Stream Deck +, tap focuses the pane | done |
 | 4. Plus dials and touch strip | done |
-| 5. Claude Code hooks, Conn (long-press approve), done ping | next |
+| 5. Conn (long-press confirm), done ping | done; Claude Code hooks pending a yes |
 | 6. Remote keys and travel profile | planned |
 | 7. XL status wall | agent wall done, global row and third-party rows planned |
 | 8. Packaging, launchd, install | planned |
@@ -75,6 +75,11 @@ Plugin logs land in `packages/plugin/io.gamov.lcars.sdPlugin/logs/`. The propert
 ### Inbox Key
 
 One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most recently changed). Colour is the agent state (orange working, red blocked, green done, grey idle), the badge is the agent kind, the corner tag is the host when more than one host is online, the text is the pane title. Short tap focuses the pane through Ops and raises iTerm. Long press is reserved for Conn and does nothing yet.
+
+### Conn and the done ping
+
+- **Conn** is a long press (400 ms or more) on an Inbox Key whose agent is `blocked`: Ops presses Enter in that pane, which confirms whatever the agent's dialog has highlighted. A short tap never does this; a long press on a non-blocked key only blinks.
+- **Done ping**: when an agent enters `blocked` or finishes a turn (`working` → `idle`), its key blinks and a system sound plays (Ping for blocked, Glass for done). The first view after a reconnect only primes the baseline. Mute with the **Bell** setting on any Inbox Key.
 
 ### Dials and touch strip (Stream Deck +)
 

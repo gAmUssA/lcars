@@ -58,6 +58,12 @@ test("scroll posts the delta and returns the applied offset", async () => {
   expect(JSON.parse(seen[0].body)).toEqual({ action: "scroll", session: "mini/w7:p1", delta: 3 });
 });
 
+test("sendKeys posts the key list", async () => {
+  const { url, seen } = await serve(200, '{"ok":true}');
+  await createOpsActions({ url }).sendKeys("studio/w1:p1", ["enter"]);
+  expect(JSON.parse(seen[0].body)).toEqual({ action: "send_keys", session: "studio/w1:p1", keys: ["enter"] });
+});
+
 test("prompt posts the text", async () => {
   const { url, seen } = await serve(200, '{"ok":true}');
   await createOpsActions({ url }).prompt("studio/w1:p1", "/effort high");

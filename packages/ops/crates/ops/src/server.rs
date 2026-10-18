@@ -66,7 +66,8 @@ pub async fn serve(
 /// `POST /actions` body. `session` is a `FleetView` session id (`host/pane`).
 ///
 /// Actions: `focus`; `scroll` with `delta` rows (positive scrolls up into
-/// scrollback); `prompt` with `text` submitted to the agent plus Enter.
+/// scrollback); `prompt` with `text` submitted to the agent plus Enter;
+/// `send_keys` with `keys` (Herdr logical key names such as `enter`, `esc`).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionRequest {
     pub action: String,
@@ -75,6 +76,8 @@ pub struct ActionRequest {
     pub delta: Option<i64>,
     #[serde(default)]
     pub text: Option<String>,
+    #[serde(default)]
+    pub keys: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,10 +138,19 @@ async fn actions(
                 return action_error(StatusCode::BAD_REQUEST, "prompt needs `text`".to_string())
             }
         },
+        "send_keys" => match request.keys.as_deref() {
+            Some(keys) => state.relay.send_keys(&session, keys).await.map(|()| None),
+            None => {
+                return action_error(
+                    StatusCode::BAD_REQUEST,
+                    "send_keys needs `keys` (e.g. [\"enter\"])".to_string(),
+                )
+            }
+        },
         other => {
             return action_error(
                 StatusCode::BAD_REQUEST,
-                format!("unknown action `{other}`; supported: focus, scroll, prompt"),
+                format!("unknown action `{other}`; supported: focus, scroll, prompt, send_keys"),
             )
         }
     };
@@ -434,6 +446,32 @@ mod tests {
             post_action(h.addr, r#"{"action":"prompt","session":"mini/w7:p1"}"#).await;
         assert_eq!(status, 400);
         assert!(json["error"].as_str().unwrap().contains("text"));
+    }
+
+    #[tokio::test]
+    async fn send_keys_relays_logical_keys_to_the_agent() {
+        let mut h = start().await;
+        let (status, json) = post_action(
+            h.addr,
+            r#"{"action":"send_keys","session":"mini/w7:p1","keys":["enter"]}"#,
+        )
+        .await;
+        assert_eq!(status, 200, "{json}");
+        let req = h.herdr_requests.recv().await.unwrap();
+        assert_eq!(req["method"], "agent.send_keys");
+        assert_eq!(
+            req["params"],
+            serde_json::json!({"target": "w7:p1", "keys": ["enter"]})
+        );
+        let (status, json) = post_action(
+            h.addr,
+            r#"{"action":"send_keys","session":"mini/w7:p1","keys":[]}"#,
+        )
+        .await;
+        assert_eq!(status, 502, "{json}");
+        let (status, _) =
+            post_action(h.addr, r#"{"action":"send_keys","session":"mini/w7:p1"}"#).await;
+        assert_eq!(status, 400);
     }
 
     #[tokio::test]

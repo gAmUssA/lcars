@@ -392,10 +392,7 @@ mod tests {
         let session = &fleet.sessions["studio/w9:p2"];
         assert_eq!(session.state, AgentState::Unknown);
         assert_eq!(session.agent, None);
-        assert_eq!(
-            session.cwd.as_deref(),
-            Some("/Users/me/projects/lcars")
-        );
+        assert_eq!(session.cwd.as_deref(), Some("/Users/me/projects/lcars"));
 
         // Recorded sequence: working, unknown, blocked, unknown, idle, unknown.
         // The trailing `unknown` after each report is Herdr releasing the

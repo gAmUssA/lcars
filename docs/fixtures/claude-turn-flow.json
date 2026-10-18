@@ -1,0 +1,371 @@
+[
+ {
+  "t": 0.0,
+  "tag": "broad",
+  "frame": "{\"id\":\"lcars-broad\",\"result\":{\"type\":\"subscription_started\"}}"
+ },
+ {
+  "t": 0.317,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "split",
+    "--current",
+    "--direction",
+    "down",
+    "--ratio",
+    "0.35",
+    "--no-focus",
+    "--cwd",
+    "/Users/me/projects/lcars"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:split\",\"result\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"pane_id\":\"w9:p7\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":12},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200e81c8f41b\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 0.317,
+  "tag": "note",
+  "frame": "test pane = w9:p7"
+ },
+ {
+  "t": 0.319,
+  "tag": "status",
+  "frame": "{\"id\":\"lcars-status\",\"result\":{\"type\":\"subscription_started\"}}"
+ },
+ {
+  "t": 0.419,
+  "tag": "broad",
+  "frame": "{\"data\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"pane_id\":\"w9:p7\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":12},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200e81c8f41b\",\"workspace_id\":\"w9\"},\"type\":\"pane_created\"},\"event\":\"pane_created\"}"
+ },
+ {
+  "t": 0.936,
+  "tag": "broad",
+  "frame": "{\"data\":{\"agent\":\"claude\",\"pane_id\":\"w9:p7\",\"type\":\"pane_agent_detected\",\"workspace_id\":\"w9\"},\"event\":\"pane_agent_detected\"}"
+ },
+ {
+  "t": 4.273,
+  "tag": "status",
+  "frame": "{\"data\":{\"agent\":\"claude\",\"agent_status\":\"idle\",\"pane_id\":\"w9:p7\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 4.274,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "start",
+    "conn-test",
+    "--kind",
+    "claude",
+    "--pane",
+    "w9:p7"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:start\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"18e673cf-0c16-4641-bd48-a1839cca3c81\"},\"agent_status\":\"idle\",\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"interactive_ready\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p7\",\"revision\":1,\"state_change_seq\":4716,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200e81c8f41b\",\"terminal_title\":\"\u2733 Claude Code\",\"terminal_title_stripped\":\"Claude Code\",\"workspace_id\":\"w9\"},\"argv\":[\"claude\"],\"type\":\"agent_started\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 6.296,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "get",
+    "conn-test"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:get\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"18e673cf-0c16-4641-bd48-a1839cca3c81\"},\"agent_status\":\"idle\",\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"interactive_ready\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p7\",\"revision\":1,\"state_change_seq\":4716,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200e81c8f41b\",\"terminal_title\":\"\u2733 Claude Code\",\"terminal_title_stripped\":\"Claude Code\",\"workspace_id\":\"w9\"},\"type\":\"agent_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 6.307,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "read",
+    "conn-test",
+    "--source",
+    "visible",
+    "--lines",
+    "40"
+   ],
+   "rc": 0,
+   "stdout": "\u2590\u259b\u2588\u2588\u2588\u259b\u2588   Claude Code v2.1.302\n\u259d\u259c\u2588\u2588\u2588\u2588\u2588\u2588\u2580  Fable 5.1 \u00b7 Claude Max\n \u259d\u259d   \u259d\u259d   ~/projects/lcars\n\n\n                                   \u25cf high \u00b7 /effort\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\u276f\u00a0Try \"refactor <filepath>\"\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n   Fable 5.1 \u2502 lcars main* \u2502 0%/1M \u2502 +0/-0 \u2502 0s\n  \u23f5\u23f5 auto mode on (shift+tab to cycle) \u00b7 \u2190 1 agent",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 6.317,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "get",
+    "conn-test"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:get\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"18e673cf-0c16-4641-bd48-a1839cca3c81\"},\"agent_status\":\"idle\",\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"interactive_ready\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p7\",\"revision\":1,\"state_change_seq\":4716,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200e81c8f41b\",\"terminal_title\":\"\u2733 Claude Code\",\"terminal_title_stripped\":\"Claude Code\",\"workspace_id\":\"w9\"},\"type\":\"agent_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 6.628,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "prompt",
+    "conn-test",
+    "Use the Bash tool to run exactly this command and show me its output: ls -la"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:prompt\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"18e673cf-0c16-4641-bd48-a1839cca3c81\"},\"agent_status\":\"idle\",\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"interactive_ready\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p7\",\"revision\":1,\"state_change_seq\":4716,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200e81c8f41b\",\"terminal_title\":\"\u2733 Claude Code\",\"terminal_title_stripped\":\"Claude Code\",\"workspace_id\":\"w9\"},\"type\":\"agent_prompted\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 6.975,
+  "tag": "status",
+  "frame": "{\"data\":{\"agent\":\"claude\",\"agent_status\":\"working\",\"pane_id\":\"w9:p7\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 28.727,
+  "tag": "status",
+  "frame": "{\"data\":{\"agent\":\"claude\",\"agent_status\":\"idle\",\"pane_id\":\"w9:p7\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 96.736,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "wait",
+    "conn-test",
+    "--until",
+    "blocked",
+    "--timeout",
+    "90000"
+   ],
+   "rc": 1,
+   "stdout": "",
+   "stderr": "{\"error\":{\"code\":\"timeout\",\"message\":\"timed out waiting for agent status\"},\"id\":\"cli:agent:wait\"}"
+  }
+ },
+ {
+  "t": 97.754,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "get",
+    "conn-test"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:get\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"18e673cf-0c16-4641-bd48-a1839cca3c81\"},\"agent_status\":\"idle\",\"completion_seq\":4718,\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"interactive_ready\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p7\",\"revision\":3,\"state_change_seq\":4718,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200e81c8f41b\",\"terminal_title\":\"\u2733 Directory listing with ls -la\",\"terminal_title_stripped\":\"Directory listing with ls -la\",\"tokens\":{\"model\":\"fable-5-1\",\"summary\":\"Use the Bash tool to run exactly this command an\"},\"workspace_id\":\"w9\"},\"type\":\"agent_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 97.765,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "read",
+    "conn-test",
+    "--source",
+    "visible",
+    "--lines",
+    "50"
+   ],
+   "rc": 0,
+   "stdout": "drwxr-xr-x me staff 128 B  Sun Oct 18\n  11:08:19 2026 packages\n  .rw-r--r-- me staff 5.0 KB Sun Oct 18\n  12:33:15 2026 README.md\n\n\u273b Saut\u00e9ed for 21s \u00b7 done 12:41 PM\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\u276f\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n   Fable 5.1 \u2502 lcars main* \u2502 11%/1M \u2502 +0/-0 \u2502 1m3\u2026\n   cache \u25cf 1h \u2588\u2588\u2588\u2588\u2588\u2588 58m left \u00b7 hit 63% \u00b7 misses 0",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 97.774,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "get",
+    "w9:p7"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"18e673cf-0c16-4641-bd48-a1839cca3c81\"},\"agent_status\":\"idle\",\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"pane_id\":\"w9:p7\",\"revision\":3,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":12},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200e81c8f41b\",\"terminal_title\":\"\u2733 Directory listing with ls -la\",\"terminal_title_stripped\":\"Directory listing with ls -la\",\"tokens\":{\"model\":\"fable-5-1\",\"summary\":\"Use the Bash tool to run exactly this command an\"},\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 97.774,
+  "tag": "note",
+  "frame": "approving via Ops send_keys enter (Conn)"
+ },
+ {
+  "t": 97.786,
+  "tag": "ops",
+  "frame": {
+   "request": {
+    "action": "send_keys",
+    "session": "studio/w9:p7",
+    "keys": [
+     "enter"
+    ]
+   },
+   "status": 200,
+   "body": "{\"ok\":true}"
+  }
+ },
+ {
+  "t": 97.793,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "wait",
+    "conn-test",
+    "--timeout",
+    "120000"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:wait\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"18e673cf-0c16-4641-bd48-a1839cca3c81\"},\"agent_status\":\"idle\",\"completion_seq\":4718,\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"interactive_ready\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p7\",\"revision\":3,\"state_change_seq\":4718,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200e81c8f41b\",\"terminal_title\":\"\u2733 Directory listing with ls -la\",\"terminal_title_stripped\":\"Directory listing with ls -la\",\"tokens\":{\"model\":\"fable-5-1\",\"summary\":\"Use the Bash tool to run exactly this command an\"},\"workspace_id\":\"w9\"},\"type\":\"agent_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 99.812,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "get",
+    "conn-test"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:get\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"18e673cf-0c16-4641-bd48-a1839cca3c81\"},\"agent_status\":\"idle\",\"completion_seq\":4718,\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"interactive_ready\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p7\",\"revision\":3,\"state_change_seq\":4718,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200e81c8f41b\",\"terminal_title\":\"\u2733 Directory listing with ls -la\",\"terminal_title_stripped\":\"Directory listing with ls -la\",\"tokens\":{\"model\":\"fable-5-1\",\"summary\":\"Use the Bash tool to run exactly this command an\"},\"workspace_id\":\"w9\"},\"type\":\"agent_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 100.111,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "read",
+    "conn-test",
+    "--source",
+    "recent_unwrapped",
+    "--lines",
+    "40"
+   ],
+   "rc": 0,
+   "stdout": "drwxr-xr-x me staff 128 B  Sun Oct 18\n  11:08:19 2026 packages\n  .rw-r--r-- me staff 5.0 KB Sun Oct 18\n  12:33:15 2026 README.md\n\n\u273b Saut\u00e9ed for 21s \u00b7 done 12:41 PM\n\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n\u276f\u00a0\n\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\n   Fable 5.1 \u2502 lcars main* \u2502 11%/1M \u2502 +0/-0 \u2502 1m3\u2026\n   cache \u25cf 1h \u2588\u2588\u2588\u2588\u2588\u2588 58m left \u00b7 hit 63% \u00b7 misses 0",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 106.131,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "get",
+    "conn-test"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:get\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_session\":{\"agent\":\"claude\",\"kind\":\"id\",\"source\":\"herdr:claude\",\"value\":\"18e673cf-0c16-4641-bd48-a1839cca3c81\"},\"agent_status\":\"idle\",\"completion_seq\":4718,\"cwd\":\"/Users/me/projects/lcars\",\"focused\":false,\"foreground_cwd\":\"/Users/me/projects/lcars\",\"interactive_ready\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p7\",\"revision\":3,\"state_change_seq\":4718,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200e81c8f41b\",\"terminal_title\":\"\u2733 Directory listing with ls -la\",\"terminal_title_stripped\":\"Directory listing with ls -la\",\"tokens\":{\"model\":\"fable-5-1\",\"summary\":\"Use the Bash tool to run exactly this command an\"},\"workspace_id\":\"w9\"},\"type\":\"agent_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 106.131,
+  "tag": "note",
+  "frame": "cleanup: /exit then close pane"
+ },
+ {
+  "t": 106.145,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "send-keys",
+    "conn-test",
+    "ctrl+c"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:send-keys\",\"result\":{\"type\":\"ok\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 106.666,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "send-keys",
+    "conn-test",
+    "/",
+    "e",
+    "x",
+    "i",
+    "t",
+    "enter"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:send-keys\",\"result\":{\"type\":\"ok\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 107.447,
+  "tag": "broad",
+  "frame": "{\"data\":{\"agent\":\"claude\",\"final_status\":\"idle\",\"pane_id\":\"w9:p7\",\"released\":true,\"type\":\"pane_agent_detected\",\"workspace_id\":\"w9\"},\"event\":\"pane_agent_detected\"}"
+ },
+ {
+  "t": 107.752,
+  "tag": "status",
+  "frame": "{\"data\":{\"agent_status\":\"unknown\",\"pane_id\":\"w9:p7\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 110.685,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "get",
+    "conn-test"
+   ],
+   "rc": 1,
+   "stdout": "",
+   "stderr": "{\"error\":{\"code\":\"agent_not_found\",\"message\":\"agent target conn-test not found\"},\"id\":\"cli:agent:get\"}"
+  }
+ },
+ {
+  "t": 110.723,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "close",
+    "w9:p7"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:close\",\"result\":{\"type\":\"ok\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 110.752,
+  "tag": "broad",
+  "frame": "{\"data\":{\"pane_id\":\"w9:p7\",\"type\":\"pane_closed\",\"workspace_id\":\"w9\"},\"event\":\"pane_closed\"}"
+ }
+]

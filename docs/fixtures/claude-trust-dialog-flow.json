@@ -1,0 +1,305 @@
+[
+ {
+  "t": 0.0,
+  "tag": "broad",
+  "frame": "{\"id\":\"lcars-broad\",\"result\":{\"type\":\"subscription_started\"}}"
+ },
+ {
+  "t": 0.316,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "split",
+    "--current",
+    "--direction",
+    "down",
+    "--ratio",
+    "0.35",
+    "--no-focus",
+    "--cwd",
+    "/private/tmp/claude-501/lcars/sandbox"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:split\",\"result\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"focused\":false,\"foreground_cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"pane_id\":\"w9:p6\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":12},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200a423b4b1a\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 0.316,
+  "tag": "note",
+  "frame": "test pane = w9:p6"
+ },
+ {
+  "t": 0.318,
+  "tag": "status",
+  "frame": "{\"id\":\"lcars-status\",\"result\":{\"type\":\"subscription_started\"}}"
+ },
+ {
+  "t": 0.417,
+  "tag": "broad",
+  "frame": "{\"data\":{\"pane\":{\"agent_status\":\"unknown\",\"cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"focused\":false,\"foreground_cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"pane_id\":\"w9:p6\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":0,\"offset_from_bottom\":0,\"viewport_rows\":12},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200a423b4b1a\",\"workspace_id\":\"w9\"},\"type\":\"pane_created\"},\"event\":\"pane_created\"}"
+ },
+ {
+  "t": 0.935,
+  "tag": "broad",
+  "frame": "{\"data\":{\"agent\":\"claude\",\"pane_id\":\"w9:p6\",\"type\":\"pane_agent_detected\",\"workspace_id\":\"w9\"},\"event\":\"pane_agent_detected\"}"
+ },
+ {
+  "t": 4.256,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "start",
+    "conn-test",
+    "--kind",
+    "claude",
+    "--pane",
+    "w9:p6"
+   ],
+   "rc": 1,
+   "stdout": "",
+   "stderr": "{\"error\":{\"code\":\"agent_not_ready\",\"message\":\"agent conn-test is blocked during startup and is not ready for prompts\"},\"id\":\"cli:agent:start\"}"
+  }
+ },
+ {
+  "t": 4.257,
+  "tag": "status",
+  "frame": "{\"data\":{\"agent\":\"claude\",\"agent_status\":\"blocked\",\"pane_id\":\"w9:p6\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 6.277,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "get",
+    "conn-test"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:get\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_status\":\"blocked\",\"cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"focused\":false,\"foreground_cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"launch_pending\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p6\",\"revision\":0,\"state_change_seq\":4713,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200a423b4b1a\",\"workspace_id\":\"w9\"},\"type\":\"agent_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 6.29,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "read",
+    "conn-test",
+    "--source",
+    "visible",
+    "--lines",
+    "40"
+   ],
+   "rc": 0,
+   "stdout": "this folder first.\n\n Claude Code'll be able to read, edit, and execute\n files here.\n\n Security guide\n\n \u276f No, exit\n   Yes, I trust this folder\n\n Enter to confirm \u00b7 Esc to cancel",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 6.298,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "get",
+    "conn-test"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:get\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_status\":\"blocked\",\"cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"focused\":false,\"foreground_cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"launch_pending\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p6\",\"revision\":0,\"state_change_seq\":4713,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200a423b4b1a\",\"workspace_id\":\"w9\"},\"type\":\"agent_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 6.298,
+  "tag": "note",
+  "frame": "blocked right after start (trust/startup dialog)"
+ },
+ {
+  "t": 7.32,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "get",
+    "conn-test"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:get\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_status\":\"blocked\",\"cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"focused\":false,\"foreground_cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"launch_pending\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p6\",\"revision\":0,\"state_change_seq\":4713,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200a423b4b1a\",\"workspace_id\":\"w9\"},\"type\":\"agent_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 7.332,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "read",
+    "conn-test",
+    "--source",
+    "visible",
+    "--lines",
+    "50"
+   ],
+   "rc": 0,
+   "stdout": "this folder first.\n\n Claude Code'll be able to read, edit, and execute\n files here.\n\n Security guide\n\n \u276f No, exit\n   Yes, I trust this folder\n\n Enter to confirm \u00b7 Esc to cancel",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 7.34,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "get",
+    "w9:p6"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:get\",\"result\":{\"pane\":{\"agent\":\"claude\",\"agent_status\":\"blocked\",\"cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"focused\":false,\"foreground_cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"pane_id\":\"w9:p6\",\"revision\":0,\"scroll\":{\"max_offset_from_bottom\":12,\"offset_from_bottom\":0,\"viewport_rows\":12},\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200a423b4b1a\",\"workspace_id\":\"w9\"},\"type\":\"pane_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 7.34,
+  "tag": "note",
+  "frame": "approving via Ops send_keys enter (Conn)"
+ },
+ {
+  "t": 7.458,
+  "tag": "ops",
+  "frame": {
+   "request": {
+    "action": "send_keys",
+    "session": "studio/w9:p6",
+    "keys": [
+     "enter"
+    ]
+   },
+   "status": 200,
+   "body": "{\"ok\":true}"
+  }
+ },
+ {
+  "t": 7.474,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "wait",
+    "conn-test",
+    "--timeout",
+    "90000"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:agent:wait\",\"result\":{\"agent\":{\"agent\":\"claude\",\"agent_status\":\"blocked\",\"cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"focused\":false,\"foreground_cwd\":\"/private/tmp/claude-501/lcars/sandbox\",\"launch_pending\":true,\"name\":\"conn-test\",\"pane_id\":\"w9:p6\",\"revision\":0,\"state_change_seq\":4713,\"tab_id\":\"w9:t1\",\"terminal_id\":\"term_65e200a423b4b1a\",\"workspace_id\":\"w9\"},\"type\":\"agent_info\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 7.876,
+  "tag": "broad",
+  "frame": "{\"data\":{\"agent\":\"claude\",\"final_status\":\"idle\",\"pane_id\":\"w9:p6\",\"released\":true,\"type\":\"pane_agent_detected\",\"workspace_id\":\"w9\"},\"event\":\"pane_agent_detected\"}"
+ },
+ {
+  "t": 7.882,
+  "tag": "status",
+  "frame": "{\"data\":{\"agent\":\"claude\",\"agent_status\":\"idle\",\"pane_id\":\"w9:p6\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 8.194,
+  "tag": "status",
+  "frame": "{\"data\":{\"agent_status\":\"unknown\",\"pane_id\":\"w9:p6\",\"workspace_id\":\"w9\"},\"event\":\"pane.agent_status_changed\"}"
+ },
+ {
+  "t": 8.491,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "get",
+    "conn-test"
+   ],
+   "rc": 1,
+   "stdout": "",
+   "stderr": "{\"error\":{\"code\":\"agent_not_found\",\"message\":\"agent target conn-test not found\"},\"id\":\"cli:agent:get\"}"
+  }
+ },
+ {
+  "t": 8.503,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "read",
+    "conn-test",
+    "--source",
+    "recent_unwrapped",
+    "--lines",
+    "40"
+   ],
+   "rc": 1,
+   "stdout": "",
+   "stderr": "{\"error\":{\"code\":\"agent_not_found\",\"message\":\"agent target conn-test not found\"},\"id\":\"cli:agent:read\"}"
+  }
+ },
+ {
+  "t": 8.503,
+  "tag": "note",
+  "frame": "cleanup: /exit then close pane"
+ },
+ {
+  "t": 8.511,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "send-keys",
+    "conn-test",
+    "ctrl+c"
+   ],
+   "rc": 1,
+   "stdout": "",
+   "stderr": "{\"error\":{\"code\":\"agent_not_found\",\"message\":\"agent target conn-test not found\"},\"id\":\"cli:agent:send-keys\"}"
+  }
+ },
+ {
+  "t": 9.029,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "agent",
+    "prompt",
+    "conn-test",
+    "/exit"
+   ],
+   "rc": 1,
+   "stdout": "",
+   "stderr": "{\"error\":{\"code\":\"agent_not_found\",\"message\":\"agent target conn-test not found\"},\"id\":\"cli:agent:prompt\"}"
+  }
+ },
+ {
+  "t": 12.071,
+  "tag": "cli",
+  "frame": {
+   "argv": [
+    "pane",
+    "close",
+    "w9:p6"
+   ],
+   "rc": 0,
+   "stdout": "{\"id\":\"cli:pane:close\",\"result\":{\"type\":\"ok\"}}",
+   "stderr": ""
+  }
+ },
+ {
+  "t": 12.118,
+  "tag": "broad",
+  "frame": "{\"data\":{\"pane_id\":\"w9:p6\",\"type\":\"pane_closed\",\"workspace_id\":\"w9\"},\"event\":\"pane_closed\"}"
+ }
+]

@@ -6,7 +6,8 @@ use std::collections::HashMap;
 
 use anyhow::{anyhow, bail, Result};
 use herdr_compat::api::schema::{
-    AgentPromptParams, AgentTarget, Method, PaneScrollParams, PaneTarget, ResponseResult,
+    AgentPromptParams, AgentSendKeysParams, AgentTarget, Method, PaneScrollParams,
+    PaneSendKeysParams, PaneTarget, ResponseResult,
 };
 
 use crate::herdr::client::request_once;
@@ -117,6 +118,34 @@ impl ActionRelay {
         {
             ResponseResult::Ok {} | ResponseResult::AgentPrompted { .. } => Ok(()),
             other => bail!("agent.prompt on {} returned {other:?}", session.id),
+        }
+    }
+
+    /// Send logical key presses (`enter`, `esc`, `y`, `ctrl+c`, …) to the pane.
+    /// Herdr validates the key names before writing anything. Which keys mean
+    /// "approve" is the plugin's decision (Conn), not Ops's.
+    pub async fn send_keys(&self, session: &Session, keys: &[String]) -> Result<()> {
+        if keys.is_empty() {
+            bail!("send_keys for {} needs at least one key", session.id);
+        }
+        let transport = self.transport_for(session)?;
+        let id = format!("ops:{}:keys:{}", session.host, session.pane_id);
+        let method = if session.agent.is_some() {
+            Method::AgentSendKeys(AgentSendKeysParams {
+                target: session.pane_id.clone(),
+                keys: keys.to_vec(),
+            })
+        } else {
+            Method::PaneSendKeys(PaneSendKeysParams {
+                pane_id: session.pane_id.clone(),
+                keys: keys.to_vec(),
+            })
+        };
+        match request_once(transport, id, method).await? {
+            ResponseResult::Ok {}
+            | ResponseResult::AgentInfo { .. }
+            | ResponseResult::PaneInfo { .. } => Ok(()),
+            other => bail!("send_keys on {} returned {other:?}", session.id),
         }
     }
 

@@ -7,11 +7,13 @@ export type OpsActions = {
   scroll(sessionId: string, delta: number): Promise<number>;
   /** Submit `text` plus Enter to the agent in the pane. */
   prompt(sessionId: string, text: string): Promise<void>;
+  /** Press Herdr logical keys (`enter`, `esc`, …) in the pane. */
+  sendKeys(sessionId: string, keys: string[]): Promise<void>;
 };
 
 export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
-type ActionBody = { action: string; session: string; delta?: number; text?: string };
+type ActionBody = { action: string; session: string; delta?: number; text?: string; keys?: string[] };
 
 export function createOpsActions(opts: { url: string; fetchImpl?: FetchLike; timeoutMs?: number }): OpsActions {
   const fetchImpl: FetchLike = opts.fetchImpl ?? ((input, init) => fetch(input, init));
@@ -52,6 +54,9 @@ export function createOpsActions(opts: { url: string; fetchImpl?: FetchLike; tim
     },
     prompt: async (sessionId, text) => {
       await send({ action: "prompt", session: sessionId, text });
+    },
+    sendKeys: async (sessionId, keys) => {
+      await send({ action: "send_keys", session: sessionId, keys });
     },
   };
 }

@@ -54,6 +54,12 @@
         <option value="project">Project folder</option>
       </sdpi-select>
     </sdpi-item>
+    <sdpi-item label="Bell">
+      <sdpi-select setting="bell" global default="on">
+        <option value="on">Play a sound when an agent blocks or finishes</option>
+        <option value="off">Silent (keys still flash)</option>
+      </sdpi-select>
+    </sdpi-item>
     <!-- Ops address is global: every LCARS key shares one daemon. -->
     <sdpi-item label="Ops address">
       <sdpi-textfield setting="opsUrl" global placeholder="http://127.0.0.1:7677 (default)"></sdpi-textfield>

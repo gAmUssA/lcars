@@ -6,12 +6,15 @@ import streamDeck from "@elgato/streamdeck";
 import { createDials } from "./actions/dials";
 import { InboxKeyAction } from "./actions/inbox-key";
 import { createFleetStore } from "./core/store";
+import { detectFlips } from "./core/transitions";
+import { createBell } from "./os/bell";
+import type { Session } from "./ops/types";
 import { createOpsActions, type OpsActions } from "./ops/actions";
 import { createOpsClient, DEFAULT_OPS_URL, type OpsClient } from "./ops/client";
 import { createTerminalActivator } from "./os/terminal";
 
 /** Shared by every LCARS key; set from any Inbox Key property inspector. */
-type GlobalSettings = { opsUrl?: string };
+type GlobalSettings = { opsUrl?: string; bell?: "on" | "off" };
 
 streamDeck.logger.setLevel("info");
 
@@ -26,18 +29,39 @@ const ops: OpsActions = {
   focus: (id) => actions.focus(id),
   scroll: (id, delta) => actions.scroll(id, delta),
   prompt: (id, text) => actions.prompt(id, text),
+  sendKeys: (id, keys) => actions.sendKeys(id, keys),
 };
+let bellEnabled = true;
+const bell = createBell({ enabled: () => bellEnabled });
 
 const terminal = createTerminalActivator({ app: process.env.LCARS_TERMINAL_APP });
 const inbox = new InboxKeyAction(store, ops, terminal);
 const dials = createDials({ store, ops, terminal });
 
-store.subscribe(() => {
+// Done ping: compare consecutive healthy views. The first view after a
+// (re)connect only primes the baseline, so a reconnect never pings for
+// agents that were already blocked.
+let previous: Session[] | null = null;
+store.subscribe((state) => {
   inbox.renderAll();
   for (const dial of dials) dial.renderAll();
+  if (!state.healthy) {
+    previous = null;
+    return;
+  }
+  const current = store.allKeys();
+  if (previous !== null) {
+    for (const flip of detectFlips(previous, current)) {
+      streamDeck.logger.info(`ping: ${flip.session.id} ${flip.kind}`);
+      inbox.flash(flip.session.id);
+      bell.play(flip.kind);
+    }
+  }
+  previous = current;
 });
 
 const applyConnection = (settings: GlobalSettings): void => {
+  bellEnabled = settings.bell !== "off";
   const url = settings.opsUrl?.trim() || DEFAULT_OPS_URL;
   if (client && url === opsUrl) return;
   opsUrl = url;

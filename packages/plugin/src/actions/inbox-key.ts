@@ -1,7 +1,7 @@
 // Inbox Key: one Herdr agent pane per key. Colour is the agent state, short
-// tap focuses the pane (via Ops) and raises the terminal. Long press is
-// reserved for Conn (unblock/approve) in a later milestone and does nothing
-// yet, so an accidental hold never focuses or approves anything.
+// tap focuses the pane (via Ops) and raises the terminal. Long press is Conn:
+// on a blocked pane it confirms the agent's highlighted option (Enter); on
+// any other pane it does nothing but blink. Conn never fires on a short tap.
 import streamDeck, {
   SingletonAction,
   type DidReceiveSettingsEvent,
@@ -19,8 +19,11 @@ import type { TerminalActivator } from "../os/terminal";
 export type KeyLayout = "paged" | "wall";
 export type InboxSettings = { slotIndex?: number | string; display?: DisplayMode; layout?: KeyLayout };
 
-/** Presses at or above this are long presses (Conn, later). */
+/** Presses at or above this are long presses (Conn). */
 export const LONG_PRESS_MS = 400;
+
+/** What Conn sends: confirm whatever the agent's dialog has highlighted. */
+export const CONN_KEYS = ["enter"];
 
 type SlotConfig = { slot: number; display: DisplayMode; layout: KeyLayout };
 
@@ -83,7 +86,7 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
     if (!session) return;
     const longPress = start !== undefined && this.now() - start >= LONG_PRESS_MS;
     if (longPress) {
-      streamDeck.logger.info(`long press on ${session.id}: Conn not implemented yet, ignoring`);
+      await this.conn(session, ev.action);
       return;
     }
     try {
@@ -100,6 +103,33 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
     } catch (e) {
       streamDeck.logger.error(`raise terminal failed: ${String(e)}`);
     }
+  }
+
+  /** Conn: confirm a blocked agent's dialog. Anything else is a refused hold. */
+  async conn(session: { id: string; state: string }, action: { showAlert(): Promise<void>; showOk(): Promise<void> }): Promise<void> {
+    if (session.state !== "blocked") {
+      streamDeck.logger.info(`conn on ${session.id} ignored: state is ${session.state}, not blocked`);
+      await action.showAlert();
+      return;
+    }
+    try {
+      await this.ops.sendKeys(session.id, CONN_KEYS);
+      streamDeck.logger.info(`conn: confirmed ${session.id}`);
+      await action.showOk();
+    } catch (e) {
+      streamDeck.logger.error(`conn on ${session.id} failed: ${String(e)}`);
+      await action.showAlert();
+    }
+  }
+
+  /** Blink the key that currently shows `sessionId`, if any. */
+  flash(sessionId: string): void {
+    this.actions.forEach((a) => {
+      if (!a.isKey()) return;
+      const config = this.#configs.get(a.id);
+      if (!config) return;
+      if (sessionFor(this.store, config)?.id === sessionId) void a.showAlert();
+    });
   }
 
   renderAll(): void {
