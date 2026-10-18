@@ -11,7 +11,7 @@ use ops::herdr::client::HostClient;
 use ops::model::{Fleet, HostEvent};
 use ops::server::{self, FleetView};
 use tokio::net::TcpListener;
-use tokio::sync::{mpsc, watch};
+use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
@@ -23,7 +23,8 @@ Usage:
   ops --print-default-config Print the example ops.toml and exit
   ops --help
 
-Logs go to stdout. Set RUST_LOG (e.g. RUST_LOG=ops=debug) to adjust.";
+Logs go to stdout. Set RUST_LOG (e.g. RUST_LOG=ops=debug) to adjust.
+The API token is written to <state dir>/token (OPS_STATE_DIR, default ~/.local/state/ops).";
 
 #[derive(Debug)]
 enum Cli {
@@ -86,7 +87,9 @@ async fn run(config_path: PathBuf) -> Result<()> {
 
     let config: Config = config::load(&config_path)?;
     let state_dir = config::state_dir();
-    info!(config = %config_path.display(), hosts = config.hosts.len(), "ops starting");
+    let token = server::load_or_create_token(&state_dir)
+        .with_context(|| format!("cannot create the API token under {}", state_dir.display()))?;
+    info!(config = %config_path.display(), hosts = config.hosts.len(), token_file = %server::token_path(&state_dir).display(), "ops starting");
 
     let listener = TcpListener::bind(&config.listen).await.with_context(|| {
         format!(
@@ -95,8 +98,15 @@ async fn run(config_path: PathBuf) -> Result<()> {
         )
     })?;
 
-    let mut fleet = Fleet::with_hosts(config.hosts.iter().map(|h| h.name.as_str()), now_ms());
+    let mut fleet = Fleet::with_hosts(
+        config
+            .hosts
+            .iter()
+            .map(|h| (h.name.as_str(), h.socket.is_some())),
+        now_ms(),
+    );
     let (view_tx, view_rx) = watch::channel(Arc::new(FleetView::from_fleet(&fleet)));
+    let (updates, _) = broadcast::channel(server::UPDATE_BUFFER);
     let (event_tx, mut event_rx) = mpsc::channel::<(String, HostEvent)>(256);
 
     let mut transports = std::collections::HashMap::new();
@@ -111,8 +121,9 @@ async fn run(config_path: PathBuf) -> Result<()> {
     drop(event_tx);
     let relay = Arc::new(ActionRelay::new(transports));
 
+    let serve_updates = updates.clone();
     tokio::spawn(async move {
-        if let Err(err) = server::serve(listener, view_rx, relay).await {
+        if let Err(err) = server::serve(listener, view_rx, serve_updates, relay, &token).await {
             warn!(%err, "plugin server stopped");
         }
     });
@@ -129,7 +140,7 @@ async fn run(config_path: PathBuf) -> Result<()> {
                 let Some((host, event)) = next else { bail!("all host clients stopped") };
                 log_event(&host, &event);
                 if fleet.apply(&host, event, now_ms()) {
-                    let _ = view_tx.send(Arc::new(FleetView::from_fleet(&fleet)));
+                    server::publish(&view_tx, &updates, Arc::new(FleetView::from_fleet(&fleet)));
                 }
             }
         }

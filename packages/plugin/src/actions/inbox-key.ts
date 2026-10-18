@@ -49,7 +49,9 @@ export const INBOX_KEY_UUID = "io.gamov.lcars.inbox";
 export class InboxKeyAction extends SingletonAction<InboxSettings> {
   override readonly manifestId = INBOX_KEY_UUID;
   readonly #configs = new Map<string, SlotConfig>();
-  readonly #pressStart = new Map<string, number>();
+  // What was under the finger when it went down: the deck can reorder
+  // during a hold, and Conn must confirm the agent the operator saw.
+  readonly #press = new Map<string, { at: number; sessionId: string | null }>();
 
   constructor(
     private readonly store: FleetStore,
@@ -72,18 +74,23 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
 
   override onWillDisappear(ev: WillDisappearEvent<InboxSettings>): void {
     this.#configs.delete(ev.action.id);
-    this.#pressStart.delete(ev.action.id);
+    this.#press.delete(ev.action.id);
   }
 
   override onKeyDown(ev: KeyDownEvent<InboxSettings>): void {
-    this.#pressStart.set(ev.action.id, this.now());
+    const shown = sessionFor(this.store, slotConfig(ev.payload.settings));
+    this.#press.set(ev.action.id, { at: this.now(), sessionId: shown?.id ?? null });
   }
 
   override async onKeyUp(ev: KeyUpEvent<InboxSettings>): Promise<void> {
-    const start = this.#pressStart.get(ev.action.id);
-    this.#pressStart.delete(ev.action.id);
-    const session = sessionFor(this.store, slotConfig(ev.payload.settings));
-    if (!session) return;
+    const press = this.#press.get(ev.action.id);
+    this.#press.delete(ev.action.id);
+    const session = this.resolvePress(press?.sessionId ?? null);
+    if (!session) {
+      if (press?.sessionId) await ev.action.showAlert(); // it moved or vanished during the hold
+      return;
+    }
+    const start = press?.at;
     const longPress = start !== undefined && this.now() - start >= LONG_PRESS_MS;
     if (longPress) {
       await this.conn(session, ev.action);
@@ -103,6 +110,12 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
     } catch (e) {
       streamDeck.logger.error(`raise terminal failed: ${String(e)}`);
     }
+  }
+
+  /** The session pressed at key down, looked up again now; null if it is gone. */
+  resolvePress(sessionId: string | null) {
+    if (!sessionId) return null;
+    return this.store.allKeys().find((s) => s.id === sessionId) ?? null;
   }
 
   /** Conn: confirm a blocked agent's dialog. Anything else is a refused hold. */
@@ -144,6 +157,7 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
         return;
       }
       const session = sessionFor(this.store, config);
+      const hostUp = session ? state.view?.hosts.find((h) => h.name === session.host)?.connected !== false : true;
       void a.setImage(
         renderKeySvg(
           session
@@ -152,7 +166,9 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
                 status: session.state,
                 agent: session.agent ?? "shell",
                 host: hostTag(session, state.view),
-                live: state.healthy,
+                // Dim when Ops is gone or when this session's host is: both
+                // mean the colour is a memory, not a reading.
+                live: state.healthy && hostUp,
               }
             : null,
         ),

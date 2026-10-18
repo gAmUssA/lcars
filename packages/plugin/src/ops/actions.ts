@@ -1,6 +1,8 @@
 // Key presses and dial turns become `POST /actions` calls to Ops, which
 // relays them to the Herdr host that owns the session.
 
+import { authHeaders } from "./token";
+
 export type OpsActions = {
   focus(sessionId: string): Promise<void>;
   /** Scroll the pane by `delta` rows (positive = up into scrollback). Resolves to the applied offset. */
@@ -15,7 +17,7 @@ export type FetchLike = (input: string, init: RequestInit) => Promise<Response>;
 
 type ActionBody = { action: string; session: string; delta?: number; text?: string; keys?: string[] };
 
-export function createOpsActions(opts: { url: string; fetchImpl?: FetchLike; timeoutMs?: number }): OpsActions {
+export function createOpsActions(opts: { url: string; token?: () => string | null; fetchImpl?: FetchLike; timeoutMs?: number }): OpsActions {
   const fetchImpl: FetchLike = opts.fetchImpl ?? ((input, init) => fetch(input, init));
   const base = opts.url.replace(/\/$/, "");
   const timeoutMs = opts.timeoutMs ?? 5000;
@@ -26,7 +28,7 @@ export function createOpsActions(opts: { url: string; fetchImpl?: FetchLike; tim
     try {
       const response = await fetchImpl(`${base}/actions`, {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", ...authHeaders(opts.token?.() ?? null) },
         body: JSON.stringify(body),
         signal: controller.signal,
       });

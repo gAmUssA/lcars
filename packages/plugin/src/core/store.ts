@@ -97,12 +97,14 @@ export function createFleetStore(opts: { localHost?: string | null } = {}): Flee
     sessionAt(slot) {
       return pageSlice(state.keys, state.ui.page)[slot] ?? null;
     },
+    // The wall is "the n-th agent across the fleet": the Plus host filter
+    // must not rewrite it.
     sessionAtAbsolute(slot) {
-      return state.keys[slot] ?? null;
+      return all[slot] ?? null;
     },
     allKeys: () => all,
     movePage(step) {
-      recompute({}, { page: state.ui.page + Math.sign(step) });
+      recompute({}, { page: state.ui.page + Math.trunc(step) });
     },
     resetPage() {
       recompute({}, { page: 0 });
@@ -117,7 +119,7 @@ export function createFleetStore(opts: { localHost?: string | null } = {}): Flee
       recompute({}, { stripMode: state.ui.stripMode === "fleet" ? "ticker" : "fleet" });
     },
     moveTicker(step) {
-      recompute({}, { tickerIndex: state.ui.tickerIndex + Math.sign(step) });
+      recompute({}, { tickerIndex: state.ui.tickerIndex + Math.trunc(step) });
     },
     tickerSession() {
       const blocked = blockedSessions(state.keys);
@@ -130,7 +132,10 @@ export function createFleetStore(opts: { localHost?: string | null } = {}): Flee
       recompute({}, { effort: cycleEffort(state.ui.effort, step) });
     },
     focusedSession() {
-      return focusedSession(all, localHost);
+      // Ops marks the host whose Herdr socket is on this machine; fall back
+      // to the configured name only when no view has arrived yet.
+      const local = state.view?.hosts.find((h) => h.local)?.name ?? localHost;
+      return focusedSession(all, local);
     },
   };
   return store;

@@ -51,6 +51,9 @@ test("host cycle goes all → each host → all, both directions", () => {
   expect(cycleHost(hosts, "mini", 1)).toBeNull();
   expect(cycleHost(hosts, null, -1)).toBe("mini");
   expect(cycleHost([], null, 1)).toBeNull();
+  // A fast twist reports several detents at once and moves that far.
+  expect(cycleHost(["studio", "mini", "laptop"], null, 3)).toBe("laptop");
+  expect(cycleHost(["studio", "mini", "laptop"], null, 4)).toBeNull();
 });
 
 test("effort cycles through the levels and stops at the ends", () => {
@@ -58,6 +61,7 @@ test("effort cycles through the levels and stops at the ends", () => {
   expect(cycleEffort("max", 1)).toBe("max");
   expect(cycleEffort("low", -1)).toBe("low");
   expect(cycleEffort("medium", -3)).toBe("low");
+  expect(cycleEffort("low", 3)).toBe("xhigh");
 });
 
 test("blocked sessions come oldest first", () => {
@@ -75,8 +79,8 @@ test("focused session prefers the deck's own host", () => {
 test("host summaries count states and pick the worst", () => {
   const view: FleetView = {
     hosts: [
-      { name: "studio", connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 },
-      { name: "mini", connected: false, version: null, protocol: null, error: "down", updated_at_ms: 0 },
+      { name: "studio", local: false, connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 },
+      { name: "mini", local: false, connected: false, version: null, protocol: null, error: "down", updated_at_ms: 0 },
     ],
     sessions: [],
   };

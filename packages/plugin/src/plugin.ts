@@ -13,10 +13,11 @@ import { createBell } from "./os/bell";
 import type { Session } from "./ops/types";
 import { createOpsActions, type OpsActions } from "./ops/actions";
 import { createOpsClient, DEFAULT_OPS_URL, type OpsClient } from "./ops/client";
+import { defaultTokenPath, readToken } from "./ops/token";
 import { createTerminalActivator } from "./os/terminal";
 
 /** Shared by every LCARS key; set from any Inbox Key property inspector. */
-type GlobalSettings = { opsUrl?: string; bell?: "on" | "off" };
+type GlobalSettings = { opsUrl?: string; bell?: "on" | "off"; opsTokenPath?: string };
 
 streamDeck.logger.setLevel("info");
 
@@ -24,8 +25,10 @@ streamDeck.logger.setLevel("info");
 const localHost = os.hostname().split(".")[0].toLowerCase();
 const store = createFleetStore({ localHost });
 let opsUrl = DEFAULT_OPS_URL;
+let tokenPath = defaultTokenPath();
+const token = (): string | null => readToken(tokenPath);
 let client: OpsClient | null = null;
-let actions = createOpsActions({ url: opsUrl });
+let actions = createOpsActions({ url: opsUrl, token });
 // Indirection so a changed Ops address reaches actions created at startup.
 const ops: OpsActions = {
   focus: (id) => actions.focus(id),
@@ -55,15 +58,25 @@ const globals = [new AttachAction(osa), stopAll, new DictateAction(osa), muteBel
 // (re)connect only primes the baseline, so a reconnect never pings for
 // agents that were already blocked.
 let previous: Session[] | null = null;
+let hostsUp = new Set<string>();
 store.subscribe((state) => {
   inbox.renderAll();
   for (const dial of dials) dial.renderAll();
   stopAll.renderAll();
   if (!state.healthy) {
     previous = null;
+    hostsUp = new Set();
     return;
   }
   const current = store.allKeys();
+  // A host that just (re)connected delivers its whole backlog in one frame:
+  // seed the baseline with it so already-blocked agents do not ping.
+  const nowUp = new Set((state.view?.hosts ?? []).filter((h) => h.connected).map((h) => h.name));
+  if (previous !== null) {
+    const fresh = current.filter((s) => nowUp.has(s.host) && !hostsUp.has(s.host));
+    if (fresh.length > 0) previous = [...previous, ...fresh];
+  }
+  hostsUp = nowUp;
   if (previous !== null) {
     for (const flip of detectFlips(previous, current)) {
       streamDeck.logger.info(`ping: ${flip.session.id} ${flip.kind}`);
@@ -78,12 +91,15 @@ const applyConnection = (settings: GlobalSettings): void => {
   bellEnabled = settings.bell !== "off";
   muteBell.renderAll();
   const url = settings.opsUrl?.trim() || DEFAULT_OPS_URL;
-  if (client && url === opsUrl) return;
+  const nextTokenPath = settings.opsTokenPath?.trim() || defaultTokenPath();
+  if (client && url === opsUrl && nextTokenPath === tokenPath) return;
   opsUrl = url;
-  actions = createOpsActions({ url });
+  tokenPath = nextTokenPath;
+  actions = createOpsActions({ url, token });
   client?.stop();
   client = createOpsClient({
     url,
+    token,
     onView: (view) => store.setView(view),
     onDown: (reason) => {
       streamDeck.logger.warn(`ops connection lost: ${reason}`);

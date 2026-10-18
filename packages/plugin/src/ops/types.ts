@@ -24,6 +24,8 @@ export type Session = {
 
 export type HostStatus = {
   name: string;
+  /** The host whose Herdr runs on this machine (the deck's own host). */
+  local: boolean;
   connected: boolean;
   version: string | null;
   protocol: number | null;
@@ -53,6 +55,7 @@ export function parseFleetView(text: string): FleetView {
     if (!isRecord(h) || typeof h.name !== "string") throw new Error(`hosts[${i}] has no name`);
     return {
       name: h.name,
+      local: h.local === true,
       connected: h.connected === true,
       version: str(h.version),
       protocol: typeof h.protocol === "number" ? h.protocol : null,

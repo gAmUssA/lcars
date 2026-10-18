@@ -59,13 +59,13 @@ export function cycleHost(hosts: string[], current: string | null, step: number)
   if (hosts.length === 0) return null;
   const ring: (string | null)[] = [null, ...hosts];
   const at = Math.max(0, ring.indexOf(current));
-  const next = (((at + Math.sign(step)) % ring.length) + ring.length) % ring.length;
+  const next = (((at + Math.trunc(step)) % ring.length) + ring.length) % ring.length;
   return ring[next];
 }
 
 export function cycleEffort(current: Effort, step: number): Effort {
   const at = EFFORTS.indexOf(current);
-  const next = Math.min(EFFORTS.length - 1, Math.max(0, at + Math.sign(step)));
+  const next = Math.min(EFFORTS.length - 1, Math.max(0, at + Math.trunc(step)));
   return EFFORTS[next];
 }
 

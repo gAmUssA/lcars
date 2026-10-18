@@ -24,6 +24,34 @@ test("long press threshold is the documented 400 ms and Conn sends Enter", () =>
   expect(CONN_KEYS).toEqual(["enter"]);
 });
 
+test("a press acts on the session shown at key down, even if the deck reorders during the hold", async () => {
+  const store = createFleetStore();
+  const mk = (id: string, state: "blocked" | "idle", t: number) => {
+    const [host, pane_id] = id.split("/");
+    return { id, host, workspace_id: "w1", tab_id: "w1:t1", pane_id, agent: "claude", name: null, state, title: null, cwd: null, model: null, summary: null, focused: false, seq: 0, updated_at_ms: t } as const;
+  };
+  store.setView({ hosts: [], sessions: [mk("mini/w7:p1", "blocked", 1), mk("studio/w1:p1", "idle", 2)] });
+  const sent: [string, string[]][] = [];
+  let now = 1000;
+  const ops = { focus: async () => {}, scroll: async () => 0, prompt: async () => {}, sendKeys: async (id: string, keys: string[]) => { sent.push([id, keys]); } };
+  const action = new InboxKeyAction(store, ops, { activate: async () => {} }, () => now);
+  const alerts: string[] = [];
+  const ev = (settings: object) => ({ action: { id: "k1", showAlert: async () => { alerts.push("alert"); }, showOk: async () => {} }, payload: { settings } }) as never;
+  action.onKeyDown(ev({ slotIndex: "0" }));
+  // Another agent blocks and sorts first while the finger is down.
+  store.setView({ hosts: [], sessions: [mk("studio/w1:p9", "blocked", 3), mk("mini/w7:p1", "blocked", 1), mk("studio/w1:p1", "idle", 2)] });
+  now += 500;
+  await action.onKeyUp(ev({ slotIndex: "0" }));
+  expect(sent).toEqual([["mini/w7:p1", ["enter"]]]);
+  // If the pressed session vanished, nothing is sent and the key alerts.
+  action.onKeyDown(ev({ slotIndex: "1" }));
+  store.setView({ hosts: [], sessions: [mk("studio/w1:p1", "idle", 2)] });
+  now += 500;
+  await action.onKeyUp(ev({ slotIndex: "1" }));
+  expect(sent).toHaveLength(1);
+  expect(alerts).toEqual(["alert"]);
+});
+
 test("conn confirms only blocked sessions", async () => {
   const sent: [string, string[]][] = [];
   const ops = { focus: async () => {}, scroll: async () => 0, prompt: async () => {}, sendKeys: async (id: string, keys: string[]) => { sent.push([id, keys]); } };

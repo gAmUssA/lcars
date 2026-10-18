@@ -54,6 +54,13 @@ Prebuilt artifacts: every push to `main` uploads `ops-macos-arm64` and `io.gamov
 
 Then lay out the decks in the Stream Deck app from the **LCARS** category, or let the skill write pages for you. macOS asks once for Automation consent the first time a key drives iTerm2.
 
+## Security model
+
+- Ops listens on loopback only; `allow_remote_listen = true` is required to bind anything else, and the config refuses otherwise.
+- Every endpoint except `/healthz` needs `Authorization: Bearer <token>`. Ops writes the token to `~/.local/state/ops/token` (mode 0600, `OPS_STATE_DIR` overrides) and the plugin reads it as the same user. Loopback is shared by every account on a Mac; the token is what keeps another local user from pressing keys in your agents.
+- `send_keys` relays confirming keys (Enter and the like) only to a `blocked` session; Escape and Ctrl-C pass in any state. Conn in the plugin adds the long-press requirement on top.
+- Actions on a disconnected host are refused with 503, and the keys dim so a stale colour is not mistaken for a reading.
+
 ## Build
 
 ```sh

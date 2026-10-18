@@ -114,6 +114,9 @@ impl Session {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct HostStatus {
     pub name: String,
+    /// True for the host whose Herdr socket is on this machine: the deck's
+    /// own host, which pane-level dials prefer.
+    pub local: bool,
     pub connected: bool,
     pub version: Option<String>,
     pub protocol: Option<u32>,
@@ -181,13 +184,14 @@ pub struct Fleet {
 }
 
 impl Fleet {
-    pub fn with_hosts<'a>(names: impl IntoIterator<Item = &'a str>, now_ms: u64) -> Self {
+    pub fn with_hosts<'a>(hosts: impl IntoIterator<Item = (&'a str, bool)>, now_ms: u64) -> Self {
         let mut fleet = Fleet::default();
-        for name in names {
+        for (name, local) in hosts {
             fleet.hosts.insert(
                 name.to_string(),
                 HostStatus {
                     name: name.to_string(),
+                    local,
                     connected: false,
                     version: None,
                     protocol: None,
@@ -240,6 +244,8 @@ impl Fleet {
                         .get_mut(&Session::id_for(host, &agent.pane_id))
                     {
                         session.overlay_agent(agent);
+                        session.state = derive_state(agent);
+                        session.focused = agent.focused;
                     }
                 }
                 let after: Vec<Session> = self.sessions_for(host).cloned().collect();
@@ -265,8 +271,13 @@ impl Fleet {
                     updated_at_ms: now_ms,
                 });
                 let new_state: AgentState = event.agent_status.into();
-                let mut changed = session.state != new_state;
-                session.state = new_state;
+                // A finished turn stays `done` through a repeated idle event;
+                // only focus or a fresh agent.get decides otherwise.
+                let keep_done = session.state == AgentState::Done && new_state == AgentState::Idle;
+                let mut changed = !keep_done && session.state != new_state;
+                if !keep_done {
+                    session.state = new_state;
+                }
                 if event.agent.is_some() && session.agent != event.agent {
                     session.agent = event.agent.clone();
                     changed = true;
@@ -336,8 +347,23 @@ impl Fleet {
             }
             HostEvent::AgentRefreshed(agent) => {
                 let id = Session::id_for(host, &agent.pane_id);
+                let mut changed = false;
+                if agent.focused {
+                    // One focused pane per host.
+                    for other in self
+                        .sessions
+                        .values_mut()
+                        .filter(|s| s.host == host && s.id != id)
+                    {
+                        if other.focused {
+                            other.focused = false;
+                            other.updated_at_ms = now_ms;
+                            changed = true;
+                        }
+                    }
+                }
                 let Some(session) = self.sessions.get_mut(&id) else {
-                    return false;
+                    return changed;
                 };
                 let before = session.clone();
                 session.overlay_agent(agent.as_ref());
@@ -354,7 +380,7 @@ impl Fleet {
                     session.title = agent.terminal_title_stripped.clone();
                 }
                 if *session == before {
-                    return false;
+                    return changed;
                 }
                 session.updated_at_ms = now_ms;
                 true
@@ -387,6 +413,7 @@ impl Fleet {
             .entry(host.to_string())
             .or_insert_with(|| HostStatus {
                 name: host.to_string(),
+                local: false,
                 connected: false,
                 version: None,
                 protocol: None,
@@ -470,7 +497,7 @@ mod tests {
 
     #[test]
     fn connect_then_disconnect_tracks_host_status() {
-        let mut fleet = Fleet::with_hosts(["mini"], T0);
+        let mut fleet = Fleet::with_hosts([("mini", false)], T0);
         assert!(!fleet.hosts["mini"].connected);
         assert!(fleet.apply(
             "mini",
@@ -733,6 +760,51 @@ mod tests {
         pane.terminal_title_stripped = Some("Run ls -la".into());
         assert!(fleet.apply("h", HostEvent::PaneRefreshed(Box::new(pane)), T0 + 4));
         assert_eq!(fleet.sessions["h/w9:p2"].state, AgentState::Idle);
+    }
+
+    #[test]
+    fn snapshot_derives_done_and_a_repeated_idle_keeps_it() {
+        let mut fleet = Fleet::default();
+        let mut pane = pane_from_fixture();
+        pane.agent = Some("claude".into());
+        pane.agent_status = AgentStatus::Idle;
+        assert!(fleet.apply(
+            "h",
+            HostEvent::Snapshot {
+                panes: vec![pane],
+                agents: vec![finished_agent(false)],
+            },
+            T0
+        ));
+        assert_eq!(fleet.sessions["h/w9:p2"].state, AgentState::Done);
+        // A duplicate idle event (follow-up agent.get lost) does not clear done.
+        let idle = PaneAgentStatusChangedEvent {
+            pane_id: "w9:p2".into(),
+            workspace_id: "w9".into(),
+            agent_status: AgentStatus::Idle,
+            agent: Some("claude".into()),
+            title: None,
+            display_agent: None,
+            state_labels: Default::default(),
+        };
+        assert!(!fleet.apply("h", HostEvent::StatusChanged(idle), T0 + 1));
+        assert_eq!(fleet.sessions["h/w9:p2"].state, AgentState::Done);
+    }
+
+    #[test]
+    fn agent_refresh_with_focus_clears_the_hosts_other_focused_pane() {
+        let mut fleet = Fleet::default();
+        let mut a = pane_from_fixture();
+        a.focused = true;
+        let mut b = pane_from_fixture();
+        b.pane_id = "w9:p3".into();
+        fleet.apply("h", HostEvent::PaneCreated(Box::new(a)), T0);
+        fleet.apply("h", HostEvent::PaneCreated(Box::new(b)), T0);
+        let mut refreshed = finished_agent(true);
+        refreshed.pane_id = "w9:p3".into();
+        assert!(fleet.apply("h", HostEvent::AgentRefreshed(Box::new(refreshed)), T0 + 1));
+        assert!(!fleet.sessions["h/w9:p2"].focused);
+        assert!(fleet.sessions["h/w9:p3"].focused);
     }
 
     #[test]

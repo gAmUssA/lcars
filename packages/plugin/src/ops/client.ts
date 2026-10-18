@@ -2,6 +2,7 @@
 // on every change; this client only parses and forwards. Reconnects with
 // exponential backoff and never throws into the caller.
 import WebSocket from "ws";
+import { authHeaders } from "./token";
 import { parseFleetView, type FleetView } from "./types";
 
 export const DEFAULT_OPS_URL = "http://127.0.0.1:7677";
@@ -13,6 +14,8 @@ export type OpsClient = { start(): void; stop(): void };
 export type OpsClientOptions = {
   /** Ops base URL, http(s)://host:port. */
   url: string;
+  /** Bearer token, re-read on every connect so a restarted Ops is picked up. */
+  token?: () => string | null;
   onView: (view: FleetView) => void;
   /** Called once per connection loss, with a reason for the log. */
   onDown: (reason: string) => void;
@@ -58,7 +61,9 @@ export function createOpsClient(opts: OpsClientOptions): OpsClient {
   const connect = (myEpoch: number): void => {
     if (stopped || myEpoch !== epoch) return;
     log(`ops: connecting to ${target}`);
-    const ws = new WebSocket(target);
+    const token = opts.token?.() ?? null;
+    if (!token) log("ops: no token file yet (Ops writes <state dir>/token on start); connecting anyway");
+    const ws = new WebSocket(target, { headers: authHeaders(token) });
     socket = ws;
     let wasOpen = false;
     const lost = (reason: string): void => {
@@ -80,6 +85,10 @@ export function createOpsClient(opts: OpsClientOptions): OpsClient {
       } catch (e) {
         log(`ops: ignoring malformed message: ${String(e)}`);
       }
+    });
+    ws.on("unexpected-response", (_req, res) => {
+      const why = res.statusCode === 401 ? "rejected: wrong or missing token (restart the plugin after Ops first start)" : `rejected: HTTP ${res.statusCode}`;
+      lost(why);
     });
     ws.on("error", (err) => lost(`error: ${err.message}`));
     ws.on("close", (code) => lost(`closed (${code})`));

@@ -30,6 +30,11 @@ export type TerminalActivator = { activate(): Promise<void> };
 export function createTerminalActivator(opts: { run?: RunFn; app?: string } = {}): TerminalActivator {
   const run = opts.run ?? defaultRun;
   const app = opts.app ?? DEFAULT_TERMINAL_APP;
+  // The name comes from an environment variable: keep it a plain app name so
+  // it cannot smuggle AppleScript into the `tell` line.
+  if (!/^[A-Za-z0-9 ._-]{1,64}$/.test(app)) {
+    throw new Error(`LCARS_TERMINAL_APP must be a plain application name, got ${JSON.stringify(app)}`);
+  }
   return {
     async activate() {
       await run(OSASCRIPT, ["-e", `tell application "${app}" to activate`]);

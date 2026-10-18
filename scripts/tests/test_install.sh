@@ -30,7 +30,8 @@ printf '#!/bin/sh\necho "launchctl must not run" >&2\nexit 99\n' > "$tmp/shim/la
 chmod +x "$tmp/shim/launchctl"
 
 home="$tmp/home"
-out="$(PATH="$tmp/shim:$PATH" bash "$INSTALL" --home "$home" --binary "$tmp/src/ops" 2>&1)"
+xattr -w com.apple.quarantine "0083;00000000;Safari;" "$tmp/src/ops"
+out="$(umask 002; PATH="$tmp/shim:$PATH" bash "$INSTALL" --home "$home" --binary "$tmp/src/ops" 2>&1)"
 rc=$?
 check "installer exits 0" test "$rc" -eq 0
 check "binary installed" test -x "$home/.local/bin/ops"
@@ -38,7 +39,9 @@ check "config written" grep -q 'listen = "127.0.0.1:7677"' "$home/.config/ops/op
 check "plist rendered with the home path" grep -q "$home/.local/bin/ops" "$home/Library/LaunchAgents/io.gamov.lcars.ops.plist"
 check "plist has no placeholder left" bash -c "! grep -q __HOME__ '$home/Library/LaunchAgents/io.gamov.lcars.ops.plist'"
 check "plist is valid" plutil -lint "$home/Library/LaunchAgents/io.gamov.lcars.ops.plist"
+check "plist is 0644 regardless of umask" test "$(stat -f %Lp "$home/Library/LaunchAgents/io.gamov.lcars.ops.plist")" = "644"
 check "log dir exists" test -d "$home/Library/Logs/lcars"
+check "quarantine flag removed from the installed binary" bash -c "! xattr -p com.apple.quarantine '$home/.local/bin/ops' >/dev/null 2>&1"
 check "launchctl was not invoked" bash -c "! grep -q 'launchctl must not run' <<< \"$out\""
 check "output tells how to start" grep -q "launchctl bootstrap" <<< "$out"
 

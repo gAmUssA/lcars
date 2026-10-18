@@ -24,6 +24,14 @@ pub const BACKOFF_INITIAL: Duration = Duration::from_secs(1);
 pub const BACKOFF_MAX: Duration = Duration::from_secs(30);
 /// How long one request may take before the host counts as down.
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+/// Interval of the out-of-band ping that catches a wedged forward while the
+/// event stream is legitimately quiet.
+pub const HEALTH_INTERVAL: Duration = Duration::from_secs(30);
+
+enum Refresh {
+    Pane(String),
+    Agent(String),
+}
 
 /// Events from one host, tagged with its name.
 pub type HostEventSender = mpsc::Sender<(String, HostEvent)>;
@@ -48,10 +56,8 @@ impl HostClient {
     pub async fn run(mut self, tx: HostEventSender) {
         let mut backoff = BACKOFF_INITIAL;
         loop {
-            match self.session(&tx).await {
-                Ok(()) => {
-                    backoff = BACKOFF_INITIAL;
-                }
+            match self.session(&tx, &mut backoff).await {
+                Ok(()) => return,
                 Err(err) => {
                     let message = format!("{err:#}");
                     warn!(host = %self.name, error = %message, "herdr connection lost");
@@ -70,6 +76,9 @@ impl HostClient {
             if tx.is_closed() {
                 return;
             }
+            // A wedged forward still accepts connections; drop it so the next
+            // connect goes through cancel-then-forward instead of reusing it.
+            self.transport.reset().await;
             tokio::time::sleep(backoff).await;
             backoff = (backoff * 2).min(BACKOFF_MAX);
         }
@@ -77,7 +86,7 @@ impl HostClient {
 
     /// One connected session. Returns `Ok` only if the receiver went away;
     /// any loss of the event stream is an `Err` so the caller backs off.
-    async fn session(&mut self, tx: &HostEventSender) -> Result<()> {
+    async fn session(&mut self, tx: &HostEventSender, backoff: &mut Duration) -> Result<()> {
         let pong = self.request(Method::Ping(PingParams::default())).await?;
         let (version, protocol) = match pong {
             ResponseResult::Pong {
@@ -92,6 +101,9 @@ impl HostClient {
             );
         }
         info!(host = %self.name, version = %version, protocol, via = %self.transport.describe(), "connected to herdr");
+        // A successful ping is a healthy host: the next outage starts the
+        // backoff ladder from the bottom again.
+        *backoff = BACKOFF_INITIAL;
         if tx
             .send((
                 self.name.clone(),
@@ -103,37 +115,24 @@ impl HostClient {
             return Ok(());
         }
 
-        let snapshot = match self
-            .request(Method::SessionSnapshot(EmptyParams::default()))
-            .await?
-        {
-            ResponseResult::SessionSnapshot { snapshot } => snapshot,
-            other => bail!("session.snapshot returned {other:?}"),
-        };
-        let mut pane_ids: Vec<String> = snapshot.panes.iter().map(|p| p.pane_id.clone()).collect();
-        if tx
-            .send((
-                self.name.clone(),
-                HostEvent::Snapshot {
-                    panes: snapshot.panes,
-                    agents: snapshot.agents,
-                },
-            ))
-            .await
-            .is_err()
-        {
-            return Ok(());
-        }
-
+        let mut pane_ids = self.snapshot_and_publish(tx).await?;
         let mut lines = self.subscribe(&pane_ids).await?;
+        let mut health = tokio::time::interval(HEALTH_INTERVAL);
+        health.tick().await; // the first tick fires immediately; skip it
         loop {
-            let line = match lines
-                .next_line()
-                .await
-                .context("reading herdr event stream")?
-            {
-                Some(line) => line,
-                None => bail!("herdr closed the event stream"),
+            let line = tokio::select! {
+                read = lines.next_line() => match read.context("reading herdr event stream")? {
+                    Some(line) => line,
+                    None => bail!("herdr closed the event stream"),
+                },
+                _ = health.tick() => {
+                    // Separate connection: a stalled forward or a dead Herdr
+                    // fails here even while the event socket stays silent.
+                    self.request(Method::Ping(PingParams::default()))
+                        .await
+                        .context("health ping failed")?;
+                    continue;
+                }
             };
             let frame = match parse_frame(&line) {
                 Ok(frame) => frame,
@@ -146,88 +145,107 @@ impl HostClient {
                 continue;
             };
 
-            // A new pane needs its own status subscription; Herdr has no
-            // "add subscription" call, so open a replacement connection with
-            // the full set and drop the old one once the new ack arrives.
-            if let HostEvent::PaneCreated(pane) = &event {
-                if !pane_ids.contains(&pane.pane_id) {
-                    pane_ids.push(pane.pane_id.clone());
-                    match self.subscribe(&pane_ids).await {
-                        Ok(fresh) => lines = fresh,
-                        Err(err) => {
-                            warn!(host = %self.name, pane = %pane.pane_id, %err, "could not re-subscribe for new pane; keeping old stream");
-                            pane_ids.pop();
-                        }
+            match &event {
+                // A new pane needs its own status subscription; Herdr has no
+                // "add subscription" call, so open a replacement connection.
+                // Frames buffered on the old connection are gone with it, so a
+                // fresh snapshot follows every swap.
+                HostEvent::PaneCreated(pane) if !pane_ids.contains(&pane.pane_id) => {
+                    if tx.send((self.name.clone(), event.clone())).await.is_err() {
+                        return Ok(());
                     }
+                    pane_ids.push(pane.pane_id.clone());
+                    lines = match self.subscribe(&pane_ids).await {
+                        Ok(fresh) => fresh,
+                        Err(err) => {
+                            // Usually a pane that closed while we were not
+                            // listening: rebuild the set from the server.
+                            warn!(host = %self.name, %err, "re-subscribe failed; rebuilding pane set from a snapshot");
+                            pane_ids = self.snapshot_and_publish(tx).await?;
+                            self.subscribe(&pane_ids).await?
+                        }
+                    };
+                    pane_ids = self.snapshot_and_publish(tx).await?;
+                    continue;
                 }
-            }
-            if let HostEvent::PaneClosed { pane_id } = &event {
-                pane_ids.retain(|id| id != pane_id);
-            }
-            // Follow-up reads that the event stream cannot carry: a detected
-            // agent's title and cwd, and the completion sequence that tells a
-            // finished turn from plain idleness (docs/herdr-api.md).
-            let follow_up = match &event {
+                HostEvent::PaneClosed { pane_id } => pane_ids.retain(|id| id != pane_id),
+                // Follow-up reads that the event stream cannot carry run on
+                // their own task so a slow host never stalls the stream.
                 HostEvent::AgentDetected {
                     pane_id,
                     released: false,
                     ..
-                } => self.refresh_pane(pane_id).await,
+                } => self.spawn_refresh(tx, Refresh::Pane(pane_id.clone())),
                 HostEvent::StatusChanged(e) if e.agent_status == AgentStatus::Idle => {
-                    self.refresh_agent(&e.pane_id).await
+                    self.spawn_refresh(tx, Refresh::Agent(e.pane_id.clone()))
                 }
-                _ => None,
-            };
+                _ => {}
+            }
             if tx.send((self.name.clone(), event)).await.is_err() {
                 return Ok(());
             }
-            if let Some(extra) = follow_up {
-                if tx.send((self.name.clone(), extra)).await.is_err() {
-                    return Ok(());
+        }
+    }
+
+    /// `session.snapshot`, published as a full replacement; returns the pane ids.
+    async fn snapshot_and_publish(&mut self, tx: &HostEventSender) -> Result<Vec<String>> {
+        let snapshot = match self
+            .request(Method::SessionSnapshot(EmptyParams::default()))
+            .await?
+        {
+            ResponseResult::SessionSnapshot { snapshot } => snapshot,
+            other => bail!("session.snapshot returned {other:?}"),
+        };
+        let pane_ids: Vec<String> = snapshot.panes.iter().map(|p| p.pane_id.clone()).collect();
+        let _ = tx
+            .send((
+                self.name.clone(),
+                HostEvent::Snapshot {
+                    panes: snapshot.panes,
+                    agents: snapshot.agents,
+                },
+            ))
+            .await;
+        Ok(pane_ids)
+    }
+
+    fn spawn_refresh(&mut self, tx: &HostEventSender, what: Refresh) {
+        let transport = self.transport.clone();
+        let tx = tx.clone();
+        let host = self.name.clone();
+        let id = self.next_id();
+        tokio::spawn(async move {
+            let (method, label) = match &what {
+                Refresh::Pane(pane_id) => (
+                    Method::PaneGet(PaneTarget {
+                        pane_id: pane_id.clone(),
+                    }),
+                    "pane.get",
+                ),
+                Refresh::Agent(pane_id) => (
+                    Method::AgentGet(AgentTarget {
+                        target: pane_id.clone(),
+                    }),
+                    "agent.get",
+                ),
+            };
+            let event = match request_once(&transport, id, method).await {
+                Ok(ResponseResult::PaneInfo { pane }) => HostEvent::PaneRefreshed(Box::new(pane)),
+                Ok(ResponseResult::AgentInfo { agent }) => {
+                    HostEvent::AgentRefreshed(Box::new(agent))
                 }
-            }
-        }
-    }
-
-    async fn refresh_pane(&mut self, pane_id: &str) -> Option<HostEvent> {
-        match self
-            .request(Method::PaneGet(PaneTarget {
-                pane_id: pane_id.to_string(),
-            }))
-            .await
-        {
-            Ok(ResponseResult::PaneInfo { pane }) => Some(HostEvent::PaneRefreshed(Box::new(pane))),
-            Ok(other) => {
-                debug!(host = %self.name, pane = %pane_id, ?other, "pane.get returned an unexpected result");
-                None
-            }
-            Err(err) => {
-                debug!(host = %self.name, pane = %pane_id, %err, "pane.get after detection failed");
-                None
-            }
-        }
-    }
-
-    async fn refresh_agent(&mut self, pane_id: &str) -> Option<HostEvent> {
-        match self
-            .request(Method::AgentGet(AgentTarget {
-                target: pane_id.to_string(),
-            }))
-            .await
-        {
-            Ok(ResponseResult::AgentInfo { agent }) => {
-                Some(HostEvent::AgentRefreshed(Box::new(agent)))
-            }
-            Ok(other) => {
-                debug!(host = %self.name, pane = %pane_id, ?other, "agent.get returned an unexpected result");
-                None
-            }
-            // The agent may already be gone (released, pane closed): not an error.
-            Err(err) => {
-                debug!(host = %self.name, pane = %pane_id, %err, "agent.get after idle failed");
-                None
-            }
-        }
+                Ok(other) => {
+                    debug!(host = %host, %label, ?other, "unexpected result, ignoring");
+                    return;
+                }
+                // The agent may already be gone (released, pane closed): not an error.
+                Err(err) => {
+                    debug!(host = %host, %label, %err, "follow-up read failed, ignoring");
+                    return;
+                }
+            };
+            let _ = tx.send((host, event)).await;
+        });
     }
 
     fn next_id(&mut self) -> String {
@@ -477,7 +495,7 @@ mod tests {
 
         let mut events = Vec::new();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
-        while events.len() < 10 {
+        while !matches!(events.last(), Some(HostEvent::Disconnected { .. })) {
             let (host, event) = tokio::time::timeout_at(deadline, rx.recv())
                 .await
                 .expect("events arrive in time")
@@ -521,19 +539,24 @@ mod tests {
                 AgentState::Unknown
             ]
         );
-        // The idle event triggered an agent.get; its result follows it.
-        let idle_at = events
+        // The idle event triggered an agent.get on its own task; its result
+        // may land just after the stream loss, so give it a moment.
+        let mut refreshed = events
             .iter()
-            .position(|e| matches!(e, HostEvent::StatusChanged(ev) if ev.agent_status == AgentStatus::Idle))
-            .unwrap();
-        assert!(
-            matches!(&events[idle_at + 1], HostEvent::AgentRefreshed(a) if a.completion_seq == Some(7)),
-            "{:?}",
-            events[idle_at + 1]
-        );
+            .any(|e| matches!(e, HostEvent::AgentRefreshed(a) if a.completion_seq == Some(7)));
+        while !refreshed {
+            match tokio::time::timeout(Duration::from_secs(2), rx.recv()).await {
+                Ok(Some((_, HostEvent::AgentRefreshed(a)))) if a.completion_seq == Some(7) => {
+                    refreshed = true
+                }
+                Ok(Some(_)) => continue,
+                _ => break,
+            }
+        }
+        assert!(refreshed, "{events:?}");
         // Server closed the stream: client reports the loss and will retry.
         assert!(
-            matches!(&events[9], HostEvent::Disconnected { error } if error.contains("closed"))
+            matches!(events.last(), Some(HostEvent::Disconnected { error }) if error.contains("closed"))
         );
 
         let subscribe = subs_rx.recv().await.unwrap();
@@ -600,6 +623,20 @@ mod tests {
             .await
             .unwrap()
             .unwrap();
+        // Frames buffered on the dropped connection are gone: a snapshot follows the swap.
+        let mut snapshots_after_created = 0;
+        while let Ok(Some((_, event))) =
+            tokio::time::timeout(Duration::from_millis(800), rx.recv()).await
+        {
+            if matches!(event, HostEvent::Snapshot { .. }) {
+                snapshots_after_created += 1;
+                break;
+            }
+        }
+        assert_eq!(
+            snapshots_after_created, 1,
+            "expected a snapshot after the re-subscribe"
+        );
         runner.abort();
         server.abort();
         let ids = |v: &Value| -> Vec<String> {

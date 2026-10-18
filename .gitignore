@@ -21,3 +21,4 @@ packages/plugin/*.sdPlugin/bin/
 # Stream Deck plugin build + runtime artifacts
 packages/plugin/*.sdPlugin/bin/
 packages/plugin/*.sdPlugin/logs/
+packages/plugin/logs/

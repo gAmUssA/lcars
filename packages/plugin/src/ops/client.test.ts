@@ -4,7 +4,7 @@ import { createOpsClient, wsUrl, type OpsClient } from "./client";
 import type { FleetView } from "./types";
 
 const view = (n: number): FleetView => ({
-  hosts: [{ name: "h", connected: true, version: "0.9.4", protocol: 22, error: null, updated_at_ms: n }],
+  hosts: [{ name: "h", local: false, connected: true, version: "0.9.4", protocol: 22, error: null, updated_at_ms: n }],
   sessions: [],
 });
 

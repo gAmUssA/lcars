@@ -51,6 +51,14 @@ impl Transport {
         }
     }
 
+    /// Forget a possibly wedged forward: unlink the local socket so the next
+    /// `connect` runs cancel-then-forward instead of reusing it. No-op locally.
+    pub async fn reset(&self) {
+        if let Transport::Ssh { local_socket, .. } = self {
+            let _ = tokio::fs::remove_file(local_socket).await;
+        }
+    }
+
     /// Open one fresh connection to the host's Herdr socket. For SSH
     /// transports this establishes the forward on first use and after the
     /// forwarded socket goes stale.

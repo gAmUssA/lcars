@@ -10,7 +10,7 @@ function session(id: string, agent: string | null, over: Partial<Session> = {}):
   };
 }
 
-const online = { connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 };
+const online = { local: false, connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 };
 const view: FleetView = {
   hosts: [{ name: "studio", ...online }, { name: "mini", ...online }],
   sessions: [
@@ -88,6 +88,26 @@ test("paging moves through keys and resets", () => {
   expect(store.getState().ui.page).toBe(1); // clamped
   store.resetPage();
   expect(store.sessionAt(0)?.pane_id).toBe("p0");
+});
+
+test("the wall ignores the host filter and the page", () => {
+  const store = createFleetStore();
+  store.setView(view);
+  expect(store.sessionAtAbsolute(0)?.id).toBe("mini/w7:p1");
+  store.setHostFilter("studio");
+  expect(store.sessionAt(0)?.id).toBe("studio/w1:p1");
+  expect(store.sessionAtAbsolute(0)?.id).toBe("mini/w7:p1");
+  expect(store.sessionAtAbsolute(2)?.id).toBe("studio/w1:p2");
+});
+
+test("focused session follows the host Ops marks local, whatever the machine name is", () => {
+  const store = createFleetStore({ localHost: "mac-studio" });
+  const marked: FleetView = {
+    hosts: [{ ...view.hosts[0], local: true }, view.hosts[1]],
+    sessions: [session("mini/w7:p1", "claude", { focused: true, state: "blocked" }), session("studio/w1:p1", "codex", { focused: true })],
+  };
+  store.setView(marked);
+  expect(store.focusedSession()?.id).toBe("studio/w1:p1");
 });
 
 test("strip mode toggles and the ticker cycles through blocked sessions oldest first", () => {

@@ -51,12 +51,12 @@ test("project mode without a cwd falls back to the agent kind", () => {
 });
 
 test("host tag only shows for a multi-host fleet", () => {
-  const one: FleetView = { hosts: [{ name: "studio", connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 }], sessions: [] };
+  const one: FleetView = { hosts: [{ name: "studio", local: false, connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 }], sessions: [] };
   expect(hostTag(session({}), one)).toBeNull();
   const two: FleetView = {
     hosts: [
       ...one.hosts,
-      { name: "mini", connected: false, version: null, protocol: null, error: null, updated_at_ms: 0 },
+      { name: "mini", local: false, connected: false, version: null, protocol: null, error: null, updated_at_ms: 0 },
     ],
     sessions: [],
   };

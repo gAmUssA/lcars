@@ -15,7 +15,7 @@ function s(id: string, over: Partial<Session> = {}): Session {
   };
 }
 
-const online = { connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 };
+const online = { local: false, connected: true, version: null, protocol: null, error: null, updated_at_ms: 0 };
 
 const fleet: StripScene = {
   mode: "fleet",

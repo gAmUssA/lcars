@@ -32,6 +32,12 @@ install_ops() {
   local bin_dir="$home/.local/bin" cfg_dir="$home/.config/ops" log_dir="$home/Library/Logs/lcars"
   mkdir -p "$bin_dir" "$cfg_dir" "$log_dir"
   install -m 0755 "$binary" "$bin_dir/ops"
+  # A binary downloaded from a release carries the quarantine flag; launchd
+  # kills quarantined executables before they log anything.
+  if xattr -p com.apple.quarantine "$bin_dir/ops" >/dev/null 2>&1; then
+    xattr -d com.apple.quarantine "$bin_dir/ops"
+    echo "removed the quarantine flag from $bin_dir/ops"
+  fi
   echo "installed $bin_dir/ops"
 
   if [ -f "$cfg_dir/ops.toml" ]; then
@@ -46,6 +52,8 @@ install_ops() {
     mkdir -p "$agents_dir"
     target="$agents_dir/$LABEL.plist"
     sed "s|__HOME__|$home|g" "$REPO_ROOT/packages/ops/launchd/$LABEL.plist.template" > "$target"
+    # launchctl refuses group- or world-writable plists; do not trust the umask.
+    chmod 0644 "$target"
     plutil -lint "$target" >/dev/null
     echo "wrote $target (not loaded)"
     echo "to start Ops at login:  launchctl bootstrap gui/\$(id -u) $target"

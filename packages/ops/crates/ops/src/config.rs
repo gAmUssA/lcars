@@ -18,6 +18,10 @@ pub const DEFAULT_LISTEN: &str = "127.0.0.1:7677";
 pub struct Config {
     #[serde(default = "default_listen")]
     pub listen: String,
+    /// The API carries key presses into agents; it stays on loopback unless
+    /// the operator opts in explicitly.
+    #[serde(default)]
+    pub allow_remote_listen: bool,
     #[serde(default)]
     pub hosts: Vec<HostConfig>,
 }
@@ -88,6 +92,15 @@ pub fn parse(text: &str) -> Result<Config> {
 
 impl Config {
     pub fn validate(&self) -> Result<()> {
+        let addr: std::net::SocketAddr = self.listen.parse().map_err(|e| {
+            anyhow::anyhow!("`listen` must be host:port (got `{}`): {e}", self.listen)
+        })?;
+        if !addr.ip().is_loopback() && !self.allow_remote_listen {
+            bail!(
+                "`listen = \"{}\"` is not a loopback address; the API relays key presses into agents. Use 127.0.0.1 or set `allow_remote_listen = true` knowingly",
+                self.listen
+            );
+        }
         if self.hosts.is_empty() {
             bail!("no [[hosts]] configured — add at least one host with `socket` or `ssh`");
         }
@@ -177,6 +190,18 @@ mod tests {
     fn listen_defaults_when_omitted() {
         let config = parse("[[hosts]]\nname = \"a\"\nsocket = \"/tmp/h.sock\"\n").unwrap();
         assert_eq!(config.listen, DEFAULT_LISTEN);
+    }
+
+    #[test]
+    fn rejects_non_loopback_listen_unless_opted_in() {
+        let err = parse("listen = \"0.0.0.0:7677\"\n[[hosts]]\nname = \"a\"\nsocket = \"/a\"\n")
+            .unwrap_err();
+        assert!(err.to_string().contains("loopback"), "{err}");
+        let ok = parse("listen = \"0.0.0.0:7677\"\nallow_remote_listen = true\n[[hosts]]\nname = \"a\"\nsocket = \"/a\"\n");
+        assert!(ok.is_ok());
+        let err =
+            parse("listen = \"nonsense\"\n[[hosts]]\nname = \"a\"\nsocket = \"/a\"\n").unwrap_err();
+        assert!(err.to_string().contains("host:port"), "{err}");
     }
 
     #[test]
