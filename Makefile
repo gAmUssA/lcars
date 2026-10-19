@@ -15,7 +15,8 @@ build: ## Release build of Ops and a bundled plugin
 	cd $(OPS_DIR) && cargo build --release
 	cd $(PLUGIN_DIR) && npm ci && npm run build
 
-test: ## Rust, TypeScript and shell test suites
+test: ## Rust, TypeScript and shell test suites, plus the version check
+	scripts/check-versions.sh
 	cd $(OPS_DIR) && cargo test
 	cd $(PLUGIN_DIR) && npm test
 	scripts/run-tests.sh
