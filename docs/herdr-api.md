@@ -86,6 +86,7 @@ Two families of pushed frames:
 - A `pane_id` that does not exist → `{"error":{"code":"pane_not_found","message":"pane w999:p999 not found"}}` then EOF. One bad id fails the whole subscribe request.
 - **Many `pane_id`s on one connection work.** A single `events.subscribe` with 14 `pane.agent_status_changed` entries plus `pane.created` and `pane.closed` acked `subscription_started` and delivered the status change for the one pane that moved. The connection stayed open after that pane was closed.
 - `pane.updated` does **not** fire on an agent status change (observed: no `pane_updated` frame during working → blocked → idle). Broad subscriptions are not a substitute for per-pane status subscriptions.
+- `pane.updated` **does** fire when the terminal title changes (observed 2026-10-19: `printf '\033]0;…\007'` in the pane produced one `pane_updated` carrying `terminal_title`). It does **not** fire for `herdr pane rename` (label change) — two renames produced no frame. Labels still win over terminal titles in Ops's `title`, so a renamed pane only updates on the next snapshot.
 - `pane_agent_detected` (broadcast) fires on agent attach and on release (`released: true, final_status`), with no filter. It carries `agent` but not `agent_status`.
 
 ### Ops subscription strategy (derived)
