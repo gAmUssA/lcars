@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.1 — 2026-10-19
+
+- One version everywhere: Ops crate, plugin package and Stream Deck manifest (previously `0.4.0.0`) now carry the release number; `scripts/check-versions.sh` enforces it in `make test` and the release workflow refuses a tag that disagrees.
+- Agent rules moved to `AGENTS.md` (`CLAUDE.md` imports it) and updated: Herdr 0.9.4 observed, token-protected Ops API, release steps.
+- README refreshed: install from a GitHub Release, supported-agent table, 15-key MK.2, Conn and the blocked question documented where the Inbox Key is; stale "does nothing yet" and "milestone 7" notes removed.
+- `lcars` skill: Ops calls need the bearer token, Workspace Key action listed, MK.2 model id for streamdeck-mcp.
+
 ## 0.1.0 — 2026-10-19
 
 First working console: Ops daemon plus Stream Deck plugin, running on a Stream Deck +, an XL and a 15-key MK.2.

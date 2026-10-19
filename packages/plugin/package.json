@@ -1,6 +1,6 @@
 {
   "name": "lcars-plugin",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "LCARS Stream Deck plugin: paints Herdr pane state from Ops onto keys, dials and the touch strip",
   "type": "module",
