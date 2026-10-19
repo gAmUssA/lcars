@@ -11,9 +11,17 @@ Recon notes on the Herdr socket API, with recorded frames as test fixtures: [doc
 
 ## Screenshots
 
-Stream Deck XL, agent wall page: one key per agent across both hosts (host tag top-right, agent logo, state colour, pane title).
+Stream Deck XL, agent wall page: one key per agent across both hosts (host tag top-right, agent logo, state colour, pane title), workspace keys, the global keys and the third-party usage keys.
 
 ![Stream Deck app showing the XL LCARS page](docs/images/stream-deck-xl-wall.png)
+
+Stream Deck +: eight paged Inbox Keys, the fleet bar on the touch strip (one block per host, page and effort read-outs) and the four dials.
+
+![Stream Deck app showing the Plus LCARS page](docs/images/stream-deck-plus.png)
+
+15-key MK.2, travel page: six Inbox Keys, Attach keys for the local Herdr and the remote host over mosh and tmux, Dictate, Stop All and Mute Bell.
+
+![Stream Deck app showing the MK.2 LCARS travel page](docs/images/stream-deck-mk2-travel.png)
 
 ## Status
 
