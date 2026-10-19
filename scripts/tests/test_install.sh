@@ -38,6 +38,13 @@ check "binary installed" test -x "$home/.local/bin/ops"
 check "config written" grep -q 'listen = "127.0.0.1:7677"' "$home/.config/ops/ops.toml"
 check "plist rendered with the home path" grep -q "$home/.local/bin/ops" "$home/Library/LaunchAgents/io.gamov.lcars.ops.plist"
 check "plist has no placeholder left" bash -c "! grep -q __HOME__ '$home/Library/LaunchAgents/io.gamov.lcars.ops.plist'"
+
+# A release layout: the template next to the script, named on the command line.
+rel="$tmp/release"; mkdir -p "$rel"
+cp "$HERE/../../packages/ops/launchd/io.gamov.lcars.ops.plist.template" "$rel/"
+rel_home="$tmp/home-release"
+check "explicit --plist-template renders the plist" bash -c "PATH='$tmp/shim:$PATH' bash '$INSTALL' --home '$rel_home' --binary '$tmp/src/ops' --plist-template '$rel/io.gamov.lcars.ops.plist.template' >/dev/null 2>&1 && grep -q '$rel_home/.local/bin/ops' '$rel_home/Library/LaunchAgents/io.gamov.lcars.ops.plist'"
+check "missing template fails with a hint" bash -c "PATH='$tmp/shim:$PATH' bash '$INSTALL' --home '$tmp/home-missing' --binary '$tmp/src/ops' --plist-template '$tmp/nope.template' 2>&1 | grep -q -- '--plist-template'"
 check "plist is valid" plutil -lint "$home/Library/LaunchAgents/io.gamov.lcars.ops.plist"
 check "plist is 0644 regardless of umask" test "$(stat -f %Lp "$home/Library/LaunchAgents/io.gamov.lcars.ops.plist")" = "644"
 check "log dir exists" test -d "$home/Library/Logs/lcars"
