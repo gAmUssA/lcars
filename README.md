@@ -25,7 +25,7 @@ Stream Deck XL, agent wall page: one key per agent across both hosts (host tag t
 | 4. Plus dials and touch strip | done |
 | 5. Conn (long-press confirm), done ping | done; Claude Code hooks pending a yes |
 | 6. Remote and global keys | done on the XL; travel profile waits for the small deck |
-| 7. XL status wall | done (LCARS rows); third-party usage rows wait for Marketplace installs |
+| 7. XL status wall | done |
 | 8. Packaging, launchd, install | done (agent load and skill link are explicit steps) |
 
 ## Requirements
@@ -135,7 +135,7 @@ The strip is one 800×100 scene sliced per dial. Fleet bar: one block per host c
 
 ### XL agent wall
 
-The XL page "LCARS": rows 1–2 are 16 Inbox Keys in **wall** layout (slot n is the n-th agent across all hosts in Ops's order, blocked first, then most recent, no paging), row 3 is eight Workspace Keys, row 4 the global keys. New agents appear as soon as Ops sees their first status event; keys beyond the agent count stay black. Agent Vitals and Claude & Codex Usage keys can take the free slots once those plugins are installed.
+The XL page "LCARS": rows 1–2 are 16 Inbox Keys in **wall** layout (slot n is the n-th agent across all hosts in Ops's order, blocked first, then most recent, no paging), row 3 is eight Workspace Keys, row 4 the global keys. New agents appear as soon as Ops sees their first status event; keys beyond the agent count stay black. The last two keys of rows 3 and 4 hold the third-party usage keys: Claude & Codex Usage (`com.singerous.ai-limits`) and AI Usage (`com.len.limits`), one Claude and one Codex key each. Those plugins ship encrypted manifests, so their keys are written as raw actions with the ids read from their bundled code.
 
 ### Travel deck (15-key MK.2)
 
