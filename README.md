@@ -1,6 +1,6 @@
 # LCARS
 
-Stream Deck console for coding agents, backed by [Herdr](https://herdr.dev). The full design, decisions and build plan live in [docs/HANDOFF.md](docs/HANDOFF.md). Agent rules for this repo are in [CLAUDE.md](CLAUDE.md).
+Stream Deck console for coding agents, backed by [Herdr](https://herdr.dev). The full design, decisions and build plan live in [docs/HANDOFF.md](docs/HANDOFF.md). Agent rules for this repo are in [AGENTS.md](AGENTS.md) (`CLAUDE.md` imports it). Changes per release: [CHANGELOG.md](CHANGELOG.md).
 
 | Package | What | Stack |
 | --- | --- | --- |
@@ -23,19 +23,34 @@ Stream Deck XL, agent wall page: one key per agent across both hosts (host tag t
 | 2. Ops v0: per-host event subscriptions, merged `FleetView`, loopback HTTP + WebSocket | done |
 | 3. Plugin v0: Inbox Key on the Stream Deck +, tap focuses the pane | done |
 | 4. Plus dials and touch strip | done |
-| 5. Conn (long-press confirm), done ping | done; Claude Code hooks pending a yes |
+| 5. Conn (long-press confirm), done ping | done; Claude Code hooks deferred (Herdr events are the signal) |
 | 6. Remote and global keys | done on the XL; travel profile waits for the small deck |
 | 7. XL status wall | done |
 | 8. Packaging, launchd, install | done (agent load and skill link are explicit steps) |
 
 ## Requirements
 
-- macOS, Stream Deck app 7.1+ (developed on 7.6), a Stream Deck + or XL
+- macOS, Stream Deck app 7.1+ (developed on 7.6), a Stream Deck +, XL or 15-key MK.2
 - [Herdr](https://herdr.dev) 0.9.x on every host (protocol 22)
-- Rust 1.99+ (`cargo`), Node 20.5+, `npm i -g @elgato/cli` for linking the plugin
+- Building from source: Rust stable (`cargo`), Node 20.5+, `npm i -g @elgato/cli` for packing or linking the plugin
 - Remote hosts: SSH alias in `~/.ssh/config`, reachable over Tailscale
 
 ## Install
+
+### From a release
+
+Each [GitHub Release](https://github.com/gAmUssA/lcars/releases) carries `ops-vX.Y.Z-macos-arm64`, `io.gamov.lcars.streamDeckPlugin`, `install.sh`, the launchd plist template and `SHA256SUMS`. Ops, the plugin and the manifest share the release number.
+
+```sh
+shasum -a 256 -c SHA256SUMS                       # after downloading the assets into one folder
+chmod +x ops-vX.Y.Z-macos-arm64 install.sh
+open io.gamov.lcars.streamDeckPlugin              # the Stream Deck app installs it
+./install.sh --binary ./ops-vX.Y.Z-macos-arm64    # ~/.local/bin/ops (quarantine stripped), ops.toml, plist (not loaded)
+$EDITOR ~/.config/ops/ops.toml
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/io.gamov.lcars.ops.plist
+```
+
+### From source
 
 From a fresh clone on the Mac the decks are plugged into:
 
@@ -50,9 +65,27 @@ make pack             # packages/plugin/dist/io.gamov.lcars.streamDeckPlugin, do
 
 `make status`, `make stop`, `make restart`, `make uninstall` manage the agent; Ops logs to `~/Library/Logs/lcars/ops.log`. `make install-skill` links the `lcars` Claude Code skill into `~/.claude/skills` so an agent can re-author deck pages later; see [docs/skill-install.md](docs/skill-install.md).
 
-Prebuilt artifacts: every push to `main` uploads `ops-macos-arm64` and `io.gamov.lcars.streamDeckPlugin` as workflow artifacts (Actions › CI), and a `vX.Y.Z` tag publishes them as a GitHub Release with checksums.
+Every push to `main` also uploads `ops-macos-arm64` and `io.gamov.lcars.streamDeckPlugin` as workflow artifacts (Actions › CI).
 
 Then lay out the decks in the Stream Deck app from the **LCARS** category, or let the skill write pages for you. macOS asks once for Automation consent the first time a key drives iTerm2.
+
+## Supported agents
+
+Ops shows whatever Herdr detects; the plugin draws a logo for the agents below and a two-letter code for anything else.
+
+| Agent | Logo | Code | Agent | Logo | Code |
+| --- | --- | --- | --- | --- | --- |
+| Claude Code | yes | CL | Kimi | yes | KM |
+| Codex | yes | CX | OpenCode | yes | OC |
+| GitHub Copilot | yes | CP | Kilo | yes | KL |
+| Cursor | yes | CU | Hermes | yes | HM |
+| Devin | yes | DV | Qoder CLI | yes | QC |
+| Droid | no | DR | Pi | yes | PI |
+| Grok | yes | GK | OMP | yes | OM |
+| Qwen Code | yes | QW | Letta | no | LT |
+| Mastra Code | yes | MC | Antigravity CLI | yes | AG |
+
+Claude Code-only controls (the Effort dial) act on Claude panes alone.
 
 ## Security model
 
@@ -100,7 +133,7 @@ Plugin logs land in `packages/plugin/io.gamov.lcars.sdPlugin/logs/`. The propert
 
 ### Inbox Key
 
-One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most recently changed). Colour is the agent state (orange working, red blocked, green done, grey idle; `done` is a turn that finished while nobody was looking at the pane, cleared when it is focused), the badge is the agent kind, the corner tag is the host when more than one host is online, the text is the pane title. Short tap focuses the pane through Ops and raises iTerm. Long press is reserved for Conn and does nothing yet.
+One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most recently changed). Colour is the agent state (orange working, red blocked, green done, grey idle; `done` is a turn that finished while nobody was looking at the pane, cleared when it is focused), the badge is the agent kind, the corner tag is the host when more than one host is online, the text is the pane title, or the question the agent is asking while it is blocked. Short tap focuses the pane through Ops and raises iTerm2. Long press is Conn, below.
 
 ### Conn and the done ping
 
@@ -144,7 +177,7 @@ Page "LCARS travel": six Inbox Keys in wall layout, Attach keys for the local He
 
 ### Deck layout
 
-The Plus page "LCARS" (8 Inbox Keys, slots 1–8, plus the four dials) was written with [streamdeck-mcp](https://github.com/verygoodplugins/streamdeck-mcp)'s profile manager, which edits Elgato's `ProfilesV3` files directly and must quit and relaunch the Stream Deck app around the write. Reproducible profile generation from a spec is milestone 7.
+The Plus page "LCARS" (8 Inbox Keys, slots 1–8, plus the four dials) was written with [streamdeck-mcp](https://github.com/verygoodplugins/streamdeck-mcp)'s profile manager, which edits Elgato's `ProfilesV3` files directly and must quit and relaunch the Stream Deck app around the write. The XL and MK.2 pages were written the same way; the `lcars` skill carries the recipe.
 
 ## License
 
