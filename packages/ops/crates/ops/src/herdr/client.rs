@@ -6,8 +6,9 @@ use std::time::Duration;
 
 use anyhow::{anyhow, bail, Context, Result};
 use herdr_compat::api::schema::{
-    AgentStatus, AgentTarget, EmptyParams, EventData, EventsSubscribeParams, Method, PaneTarget,
-    PingParams, Request, ResponseResult, Subscription, SubscriptionEventData,
+    AgentReadParams, AgentStatus, AgentTarget, EmptyParams, EventData, EventsSubscribeParams,
+    Method, PaneTarget, PingParams, ReadFormat, ReadSource, Request, ResponseResult, Subscription,
+    SubscriptionEventData,
 };
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, Lines};
 use tokio::net::UnixStream;
@@ -16,7 +17,7 @@ use tracing::{debug, info, warn};
 
 use super::transport::Transport;
 use super::wire::{encode_request, parse_frame, Frame};
-use crate::model::HostEvent;
+use crate::model::{extract_prompt, HostEvent};
 use crate::HERDR_PROTOCOL;
 
 /// Reconnect backoff: first retry after `INITIAL`, doubling to `MAX`.
@@ -31,7 +32,12 @@ pub const HEALTH_INTERVAL: Duration = Duration::from_secs(30);
 enum Refresh {
     Pane(String),
     Agent(String),
+    /// Read the visible screen of a pane that just blocked, for its question.
+    Prompt(String),
 }
+
+/// Rows of screen read for a blocked pane's question.
+pub const PROMPT_READ_LINES: u32 = 40;
 
 /// Events from one host, tagged with its name.
 pub type HostEventSender = mpsc::Sender<(String, HostEvent)>;
@@ -184,6 +190,9 @@ impl HostClient {
                 HostEvent::StatusChanged(e) if e.agent_status == AgentStatus::Idle => {
                     self.spawn_refresh(tx, Refresh::Agent(e.pane_id.clone()))
                 }
+                HostEvent::StatusChanged(e) if e.agent_status == AgentStatus::Blocked => {
+                    self.spawn_refresh(tx, Refresh::Prompt(e.pane_id.clone()))
+                }
                 _ => {}
             }
             if tx.send((self.name.clone(), event)).await.is_err() {
@@ -239,12 +248,26 @@ impl HostClient {
                     }),
                     "agent.get",
                 ),
+                Refresh::Prompt(pane_id) => (
+                    Method::AgentRead(AgentReadParams {
+                        target: pane_id.clone(),
+                        source: ReadSource::Visible,
+                        lines: Some(PROMPT_READ_LINES),
+                        format: ReadFormat::Text,
+                        strip_ansi: true,
+                    }),
+                    "agent.read",
+                ),
             };
             let event = match request_once(&transport, id, method).await {
                 Ok(ResponseResult::PaneInfo { pane }) => HostEvent::PaneRefreshed(Box::new(pane)),
                 Ok(ResponseResult::AgentInfo { agent }) => {
                     HostEvent::AgentRefreshed(Box::new(agent))
                 }
+                Ok(ResponseResult::PaneRead { read }) => HostEvent::PromptRead {
+                    pane_id: read.pane_id.clone(),
+                    prompt: extract_prompt(&read.text),
+                },
                 Ok(other) => {
                     debug!(host = %host, %label, ?other, "unexpected result, ignoring");
                     return;
@@ -277,6 +300,9 @@ impl HostClient {
             Subscription::PaneClosed {},
             Subscription::PaneAgentDetected {},
             Subscription::PaneFocused {},
+            // Titles and cwd move during a turn; the merge ignores frames that
+            // change nothing the deck shows (scroll, output).
+            Subscription::PaneUpdated {},
             Subscription::WorkspaceCreated {},
             Subscription::WorkspaceClosed {},
             Subscription::WorkspaceRenamed {},
@@ -380,6 +406,7 @@ pub fn dispatch(frame: Frame) -> Option<HostEvent> {
                 released,
             }),
             EventData::PaneFocused { pane_id, .. } => Some(HostEvent::PaneFocused { pane_id }),
+            EventData::PaneUpdated { pane } => Some(HostEvent::PaneRefreshed(Box::new(pane))),
             EventData::WorkspaceCreated { .. }
             | EventData::WorkspaceClosed { .. }
             | EventData::WorkspaceRenamed { .. }
@@ -470,6 +497,10 @@ mod tests {
                     json!({"id": id, "result": {"type":"subscription_started"}})
                 }
                 "pane.get" => json!({"id": id, "result": {"type":"pane_info","pane": pane_json()}}),
+                "agent.read" => json!({"id": id, "result": {"type":"pane_read","read": {
+                    "pane_id":"w9:p2","workspace_id":"w9","tab_id":"w9:t1","source":"visible","format":"text",
+                    "text":"☐ Colour\n\nWhich colour do you prefer?\n\n❯ 1. Red\n     Red\n","revision":3,"truncated":false
+                }}}),
                 "agent.get" => json!({"id": id, "result": {"type":"agent_info","agent": {
                     "agent":"lcars-test","agent_status":"idle","completion_seq":7,"state_change_seq":7,
                     "focused":false,"pane_id":"w9:p2","revision":1,"tab_id":"w9:t1","terminal_id":"t","workspace_id":"w9"
@@ -523,8 +554,6 @@ mod tests {
             assert_eq!(host, "fake");
             events.push(event);
         }
-        runner.abort();
-        server.abort();
 
         assert_eq!(
             events[0],
@@ -574,6 +603,18 @@ mod tests {
             }
         }
         assert!(refreshed, "{events:?}");
+        // The blocked event triggered an agent.read; its question arrives as PromptRead.
+        let wanted = |e: &HostEvent| matches!(e, HostEvent::PromptRead { prompt: Some(p), .. } if p == "Which colour do you prefer?");
+        let mut prompted = events.iter().any(wanted);
+        while !prompted {
+            match tokio::time::timeout(Duration::from_secs(2), rx.recv()).await {
+                Ok(Some((_, e))) => prompted = wanted(&e),
+                _ => break,
+            }
+        }
+        assert!(prompted, "no PromptRead with the recorded question");
+        runner.abort();
+        server.abort();
         // Server closed the stream: client reports the loss and will retry.
         assert!(
             matches!(events.last(), Some(HostEvent::Disconnected { error }) if error.contains("closed"))
@@ -589,6 +630,7 @@ mod tests {
                 "pane.closed",
                 "pane.agent_detected",
                 "pane.focused",
+                "pane.updated",
                 "workspace.created",
                 "workspace.closed",
                 "workspace.renamed",
@@ -596,9 +638,9 @@ mod tests {
                 "pane.agent_status_changed"
             ]
         );
-        assert_eq!(subs[8]["pane_id"], "w9:p2");
+        assert_eq!(subs[9]["pane_id"], "w9:p2");
         assert!(
-            subs[8].get("agent_status").is_none(),
+            subs[9].get("agent_status").is_none(),
             "no status filter: {subs:?}"
         );
         let _ = std::fs::remove_file(path);
@@ -735,6 +777,10 @@ mod tests {
             dispatch(released),
             Some(HostEvent::AgentDetected { released: true, .. })
         ));
+        let updated = parse_frame(r#"{"data":{"type":"pane_updated","pane":{"pane_id":"w1:p1","terminal_id":"t","workspace_id":"w1","tab_id":"w1:t1","focused":false,"agent_status":"working","revision":9,"terminal_title_stripped":"New title"}},"event":"pane_updated"}"#).unwrap();
+        assert!(
+            matches!(dispatch(updated), Some(HostEvent::PaneRefreshed(p)) if p.terminal_title_stripped.as_deref() == Some("New title"))
+        );
         let renamed = parse_frame(r#"{"data":{"type":"workspace_renamed","workspace_id":"w1","label":"new"},"event":"workspace_renamed"}"#).unwrap();
         assert_eq!(dispatch(renamed), Some(HostEvent::WorkspacesChanged));
         let focused = parse_frame(r#"{"data":{"pane_id":"w1:p2","type":"pane_focused","workspace_id":"w1"},"event":"pane_focused"}"#).unwrap();

@@ -28,7 +28,7 @@ test("a press acts on the session shown at key down, even if the deck reorders d
   const store = createFleetStore();
   const mk = (id: string, state: "blocked" | "idle", t: number) => {
     const [host, pane_id] = id.split("/");
-    return { id, host, workspace_id: "w1", tab_id: "w1:t1", pane_id, agent: "claude", name: null, state, title: null, cwd: null, model: null, summary: null, focused: false, seq: 0, updated_at_ms: t } as const;
+    return { id, host, workspace_id: "w1", tab_id: "w1:t1", pane_id, agent: "claude", name: null, state, title: null, cwd: null, model: null, summary: null, pending_prompt: null, focused: false, seq: 0, updated_at_ms: t } as const;
   };
   store.setView({ workspaces: [], hosts: [], sessions: [mk("mini/w7:p1", "blocked", 1), mk("studio/w1:p1", "idle", 2)] });
   const sent: [string, string[]][] = [];

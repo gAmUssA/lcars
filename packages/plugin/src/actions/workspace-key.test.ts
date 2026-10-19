@@ -7,7 +7,7 @@ import type { FleetView, Session, Workspace } from "../ops/types";
 
 function s(id: string, ws: string): Session {
   const [host, pane_id] = id.split("/");
-  return { id, host, workspace_id: ws, tab_id: `${ws}:t1`, pane_id, agent: "claude", name: null, state: "idle", title: null, cwd: null, model: null, summary: null, focused: false, seq: 0, updated_at_ms: 0 };
+  return { id, host, workspace_id: ws, tab_id: `${ws}:t1`, pane_id, agent: "claude", name: null, state: "idle", title: null, cwd: null, model: null, summary: null, pending_prompt: null, focused: false, seq: 0, updated_at_ms: 0 };
 }
 const ws = (id: string, number: number, label: string, state: Workspace["state"], focused = false): Workspace => {
   const [host, workspace_id] = id.split("/");

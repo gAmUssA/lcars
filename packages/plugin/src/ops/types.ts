@@ -20,6 +20,8 @@ export type Session = {
   focused: boolean;
   seq: number;
   updated_at_ms: number;
+  /** The question a blocked agent is asking, when Ops could read it. */
+  pending_prompt: string | null;
 };
 
 export type HostStatus = {
@@ -97,6 +99,7 @@ export function parseFleetView(text: string): FleetView {
       focused: s.focused === true,
       seq: typeof s.seq === "number" ? s.seq : 0,
       updated_at_ms: typeof s.updated_at_ms === "number" ? s.updated_at_ms : 0,
+      pending_prompt: str(s.pending_prompt),
     };
   });
   const workspaces: Workspace[] = (Array.isArray(raw.workspaces) ? raw.workspaces : []).map((w: unknown, i: number) => {

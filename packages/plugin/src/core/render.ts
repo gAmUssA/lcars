@@ -81,6 +81,7 @@ export function wrapLabel(label: string, perLine: number, maxLines: number): str
 const AGENT_CODE: Record<string, string> = {
   claude: "CL", codex: "CX", copilot: "CP", cursor: "CU", devin: "DV", droid: "DR", grok: "GK",
   kimi: "KM", opencode: "OC", kilo: "KL", hermes: "HM", qodercli: "QC", pi: "PI", omp: "OM",
+  qwen: "QW", letta: "LT", mastracode: "MC", "antigravity-cli": "AG",
 };
 
 function agentCode(name: string): string {

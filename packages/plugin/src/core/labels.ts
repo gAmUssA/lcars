@@ -19,6 +19,8 @@ function projectName(session: Session): string {
 }
 
 export function labelFor(session: Session, peers: Session[], display: DisplayMode = "title", max = 24): string {
+  // A blocked agent's question beats any title: it is what the key needs answered.
+  if (session.state === "blocked" && session.pending_prompt) return truncate(session.pending_prompt.trim(), max);
   if (display === "title") {
     const title = (session.title ?? "").trim();
     if (title) return truncate(title, max);

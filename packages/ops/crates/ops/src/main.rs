@@ -181,6 +181,9 @@ fn log_event(host: &str, event: &HostEvent) {
         }
         HostEvent::PaneFocused { pane_id } => info!(host, pane = %pane_id, "pane focused"),
         HostEvent::Workspaces(list) => info!(host, workspaces = list.len(), "workspaces"),
+        HostEvent::PromptRead { pane_id, prompt } => {
+            info!(host, pane = %pane_id, prompt = prompt.as_deref().unwrap_or("-"), "prompt read")
+        }
         HostEvent::WorkspacesChanged => info!(host, "workspaces changed"),
     }
 }

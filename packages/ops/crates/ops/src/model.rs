@@ -70,6 +70,42 @@ pub struct Session {
     /// Herdr's `state_change_seq`; monotonic per host.
     pub seq: u64,
     pub updated_at_ms: u64,
+    /// The question a blocked agent is asking, read from its screen; `None`
+    /// unless the session is blocked and the dialog text was recognised.
+    #[serde(default)]
+    pub pending_prompt: Option<String>,
+}
+
+/// Pull the question out of a visible-screen read of a blocked agent.
+///
+/// Observed dialogs (docs/fixtures/claude-*.json): Claude's option menus put
+/// the question on its own line above `❯ 1. …`; the folder-trust screen ends
+/// its question with `?` too. Take the last line ending in `?` above the
+/// first option marker, else the last non-empty line above it.
+pub fn extract_prompt(screen: &str) -> Option<String> {
+    let lines: Vec<&str> = screen.lines().map(str::trim_end).collect();
+    let marker = lines
+        .iter()
+        .position(|l| l.trim_start().starts_with('❯') || l.trim_start().starts_with("> "));
+    let above: &[&str] = match marker {
+        Some(i) => &lines[..i],
+        None => &lines,
+    };
+    let candidates: Vec<&str> = above
+        .iter()
+        .map(|l| l.trim())
+        .filter(|l| {
+            !l.is_empty()
+                && !l.starts_with('─')
+                && !l.starts_with('☐')
+                && !l.starts_with('╭')
+                && !l.starts_with('│')
+        })
+        .collect();
+    let question = candidates.iter().rev().find(|l| l.ends_with('?'));
+    let pick = question.or(candidates.last())?;
+    let text: String = pick.chars().take(160).collect();
+    (!text.is_empty()).then_some(text)
 }
 
 impl Session {
@@ -98,6 +134,7 @@ impl Session {
             focused: pane.focused,
             seq: 0,
             updated_at_ms: now_ms,
+            pending_prompt: None,
         }
     }
 
@@ -177,6 +214,11 @@ pub enum HostEvent {
     /// The UI focus moved to this pane; a `done` there becomes `idle`.
     PaneFocused {
         pane_id: String,
+    },
+    /// The question on a blocked pane's screen, read after it blocked.
+    PromptRead {
+        pane_id: String,
+        prompt: Option<String>,
     },
     /// The host's workspace list, from a snapshot. Replaces the host's set.
     Workspaces(Vec<WorkspaceInfo>),
@@ -294,6 +336,7 @@ impl Fleet {
                     focused: false,
                     seq: 0,
                     updated_at_ms: now_ms,
+                    pending_prompt: None,
                 });
                 let new_state: AgentState = event.agent_status.into();
                 // A finished turn stays `done` through a repeated idle event;
@@ -302,6 +345,10 @@ impl Fleet {
                 let mut changed = !keep_done && session.state != new_state;
                 if !keep_done {
                     session.state = new_state;
+                }
+                if new_state != AgentState::Blocked && session.pending_prompt.is_some() {
+                    session.pending_prompt = None;
+                    changed = true;
                 }
                 if event.agent.is_some() && session.agent != event.agent {
                     session.agent = event.agent.clone();
@@ -358,6 +405,9 @@ impl Fleet {
                 let mut merged = fresh;
                 merged.name = session.name.clone();
                 merged.seq = session.seq;
+                if merged.state == AgentState::Blocked {
+                    merged.pending_prompt = session.pending_prompt.clone();
+                }
                 // A derived `done` outlives a pane refresh; the pane view says idle.
                 if session.state == AgentState::Done && merged.state == AgentState::Idle {
                     merged.state = AgentState::Done;
@@ -407,6 +457,18 @@ impl Fleet {
                 if *session == before {
                     return changed;
                 }
+                session.updated_at_ms = now_ms;
+                true
+            }
+            HostEvent::PromptRead { pane_id, prompt } => {
+                let Some(session) = self.sessions.get_mut(&Session::id_for(host, &pane_id)) else {
+                    return false;
+                };
+                // The read raced a state change: an unblocked pane asks nothing.
+                if session.state != AgentState::Blocked || session.pending_prompt == prompt {
+                    return false;
+                }
+                session.pending_prompt = prompt;
                 session.updated_at_ms = now_ms;
                 true
             }
@@ -994,6 +1056,81 @@ mod tests {
         ));
         assert_eq!(fleet.workspaces.len(), 2);
         assert!(!fleet.apply("studio", HostEvent::WorkspacesChanged, T0 + 3));
+    }
+
+    /// Screens recorded in docs/fixtures/claude-question-flow.json and
+    /// claude-trust-dialog-flow.json.
+    const QUESTION_SCREEN: &str = "☐ Colour\n\nWhich colour do you prefer?\n\n❯ 1. Red\n     Red\n↓ 2. Green\n     Green\n─────────────\n  5. Chat about this\n\nEnter to select · ↑/↓ to navigate · Esc to cancel\n";
+    const TRUST_SCREEN: &str = "this folder first.\n\n Claude Code'll be able to read, edit, and execute\n files here.\n\n Security guide\n\n ❯ No, exit\n   Yes, I trust this folder\n\n Enter to confirm · Esc to cancel\n";
+
+    #[test]
+    fn extract_prompt_finds_the_question_above_the_options() {
+        assert_eq!(
+            extract_prompt(QUESTION_SCREEN).as_deref(),
+            Some("Which colour do you prefer?")
+        );
+        // No question mark above the marker: the last line of the dialog text.
+        assert_eq!(
+            extract_prompt(TRUST_SCREEN).as_deref(),
+            Some("Security guide")
+        );
+        assert_eq!(extract_prompt(""), None);
+        assert_eq!(extract_prompt("\n───\n\n"), None);
+        let long = format!("{}?\n❯ 1. ok\n", "x".repeat(300));
+        assert_eq!(extract_prompt(&long).unwrap().chars().count(), 160);
+    }
+
+    #[test]
+    fn prompt_read_sticks_to_blocked_sessions_and_clears_when_they_move_on() {
+        let mut fleet = Fleet::default();
+        fleet.apply(
+            "h",
+            HostEvent::PaneCreated(Box::new(pane_from_fixture())),
+            T0,
+        );
+        let blocked = status_events()
+            .into_iter()
+            .find(|e| e.agent_status == AgentStatus::Blocked)
+            .unwrap();
+        // A read that lands on a non-blocked pane is dropped.
+        assert!(!fleet.apply(
+            "h",
+            HostEvent::PromptRead {
+                pane_id: "w9:p2".into(),
+                prompt: Some("Which colour?".into())
+            },
+            T0 + 1
+        ));
+        fleet.apply("h", HostEvent::StatusChanged(blocked), T0 + 2);
+        assert!(fleet.apply(
+            "h",
+            HostEvent::PromptRead {
+                pane_id: "w9:p2".into(),
+                prompt: Some("Which colour do you prefer?".into())
+            },
+            T0 + 3
+        ));
+        assert_eq!(
+            fleet.sessions["h/w9:p2"].pending_prompt.as_deref(),
+            Some("Which colour do you prefer?")
+        );
+        // A pane refresh while still blocked keeps it.
+        let mut pane = pane_from_fixture();
+        pane.agent_status = AgentStatus::Blocked;
+        pane.agent = Some("lcars-test".into());
+        pane.terminal_title_stripped = Some("t".into());
+        fleet.apply("h", HostEvent::PaneRefreshed(Box::new(pane)), T0 + 4);
+        assert_eq!(
+            fleet.sessions["h/w9:p2"].pending_prompt.as_deref(),
+            Some("Which colour do you prefer?")
+        );
+        // Leaving blocked clears it.
+        let working = status_events()
+            .into_iter()
+            .find(|e| e.agent_status == AgentStatus::Working)
+            .unwrap();
+        assert!(fleet.apply("h", HostEvent::StatusChanged(working), T0 + 5));
+        assert_eq!(fleet.sessions["h/w9:p2"].pending_prompt, None);
     }
 
     #[test]

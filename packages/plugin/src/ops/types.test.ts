@@ -31,6 +31,9 @@ test("parses a live Ops view", () => {
   expect(view.sessions[0].state).toBe("working");
   expect(view.sessions[0].model).toBe("fable-5-1");
   expect(view.sessions[1].agent).toBeNull();
+  expect(view.sessions[0].pending_prompt).toBeNull();
+  const asking = parseFleetView(JSON.stringify({ hosts: [], sessions: [{ id: "h/p", host: "h", pane_id: "p", state: "blocked", pending_prompt: "Proceed?" }] }));
+  expect(asking.sessions[0].pending_prompt).toBe("Proceed?");
 });
 
 test("unknown state strings become unknown, missing optionals become null", () => {

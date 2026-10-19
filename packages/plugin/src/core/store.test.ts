@@ -6,7 +6,7 @@ function session(id: string, agent: string | null, over: Partial<Session> = {}):
   const [host, pane_id] = id.split("/");
   return {
     id, host, workspace_id: "w1", tab_id: "w1:t1", pane_id, agent, name: null, state: "idle",
-    title: null, cwd: null, model: null, summary: null, focused: false, seq: 0, updated_at_ms: 0, ...over,
+    title: null, cwd: null, model: null, summary: null, pending_prompt: null, focused: false, seq: 0, updated_at_ms: 0, ...over,
   };
 }
 

@@ -35,6 +35,10 @@ test("known agents get a centred logo, unknown agents a two-letter code", () => 
   expect(BADGE_SIZE).toBe(46);
   const other = decode(renderKeySvg({ ...base, agent: "zephyr" }));
   expect(other).toContain(">ZE<");
+  for (const agent of ["qwen", "mastracode", "antigravity-cli"]) {
+    expect(decode(renderKeySvg({ ...base, agent })), agent).toContain("<g transform");
+  }
+  expect(decode(renderKeySvg({ ...base, agent: "letta" }))).toContain(">LT<");
   expect(other).toContain('x="72"');
 });
 

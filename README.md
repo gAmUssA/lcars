@@ -104,6 +104,7 @@ One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most rec
 
 ### Conn and the done ping
 
+- When an agent blocks, Ops reads its screen once and the key (and the ticker) show the question it is asking instead of the pane title.
 - **Conn** is a long press (400 ms or more) on an Inbox Key whose agent is `blocked`: Ops presses Enter in that pane, which confirms whatever the agent's dialog has highlighted. A short tap never does this; a long press on a non-blocked key only blinks.
 - **Done ping**: when an agent enters `blocked` or finishes a turn (`working` → `idle`), its key blinks and a system sound plays (Ping for blocked, Glass for done). The first view after a reconnect only primes the baseline. Mute with the **Bell** setting on any Inbox Key.
 

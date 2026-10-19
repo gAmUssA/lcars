@@ -100,7 +100,7 @@ function tickerScene(scene: StripScene): string {
     );
   }
   const red = presentation("blocked").color;
-  const title = current.title ?? current.name ?? current.agent ?? current.pane_id;
+  const title = current.pending_prompt ?? current.title ?? current.name ?? current.agent ?? current.pane_id;
   const who = `${(current.name ?? current.agent ?? "agent").toUpperCase()} on ${current.host.toUpperCase()}`;
   return (
     `<rect x="0" y="0" width="${SEGMENT_WIDTH}" height="${STRIP_HEIGHT}" fill="${dim(red, scene.live)}"/>` +

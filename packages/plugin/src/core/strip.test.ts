@@ -11,7 +11,7 @@ function s(id: string, over: Partial<Session> = {}): Session {
   const [host, pane_id] = id.split("/");
   return {
     id, host, workspace_id: "w1", tab_id: "w1:t1", pane_id, agent: "claude", name: null, state: "idle",
-    title: null, cwd: null, model: null, summary: null, focused: false, seq: 0, updated_at_ms: 0, ...over,
+    title: null, cwd: null, model: null, summary: null, pending_prompt: null, focused: false, seq: 0, updated_at_ms: 0, ...over,
   };
 }
 
@@ -81,6 +81,8 @@ test("ticker shows the current blocked agent and tapping focuses it", () => {
   const first = decode(renderStripSegment({ ...ticker, tickerIndex: 0 }, 1));
   expect(first).toContain("CUE-JUDGE on STUDIO");
   expect(first).toContain("Judge brief for notch-r2");
+  const asking = { ...ticker, tickerIndex: 0, blocked: [{ ...blocked[0], pending_prompt: "Which colour do you prefer?" }, blocked[1]] };
+  expect(decode(renderStripSegment(asking, 1))).toContain("Which colour do you prefer?");
 });
 
 test("ticker with nothing blocked says so and taps do nothing", () => {

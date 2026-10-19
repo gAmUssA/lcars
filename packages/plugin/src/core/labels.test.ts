@@ -16,6 +16,7 @@ function session(over: Partial<Session>): Session {
     cwd: "/Users/me/projects/dotfiles",
     model: null,
     summary: null,
+    pending_prompt: null,
     focused: false,
     seq: 0,
     updated_at_ms: 0,
@@ -32,6 +33,14 @@ test("title mode uses the pane title, truncated", () => {
 test("title mode falls back to the project folder when the title is empty", () => {
   const s = session({ title: "   " });
   expect(labelFor(s, [s], "title")).toBe("dotfiles");
+});
+
+test("a blocked agent's question replaces the title on its key", () => {
+  const s = session({ state: "blocked", pending_prompt: "Which colour do you prefer?" });
+  expect(labelFor(s, [s], "title")).toBe("Which colour do you pre…");
+  expect(labelFor(s, [s], "project")).toBe("Which colour do you pre…");
+  const idle = session({ state: "idle", pending_prompt: "stale" });
+  expect(labelFor(idle, [idle], "title")).toBe("Computer setup");
 });
 
 test("project mode numbers panes that share a folder, across hosts", () => {

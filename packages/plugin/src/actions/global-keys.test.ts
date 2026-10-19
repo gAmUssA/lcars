@@ -8,7 +8,7 @@ function s(id: string, state: Session["state"]): Session {
   const [host, pane_id] = id.split("/");
   return {
     id, host, workspace_id: "w1", tab_id: "w1:t1", pane_id, agent: "claude", name: null, state,
-    title: null, cwd: null, model: null, summary: null, focused: false, seq: 0, updated_at_ms: 0,
+    title: null, cwd: null, model: null, summary: null, pending_prompt: null, focused: false, seq: 0, updated_at_ms: 0,
   };
 }
 
