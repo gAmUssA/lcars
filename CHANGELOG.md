@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 — unreleased
+## 0.1.0 — 2026-10-19
 
 First working console: Ops daemon plus Stream Deck plugin, running on a Stream Deck +, an XL and a 15-key MK.2.
 
