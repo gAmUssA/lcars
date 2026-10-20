@@ -141,7 +141,7 @@ Plugin logs land in `packages/plugin/io.gamov.lcars.sdPlugin/logs/`. The propert
 
 ### Desktop banners
 
-Set `[banners] enabled = true` in `ops.toml` (needs `brew install vjeantet/tap/alerter`) and Ops raises a macOS banner whenever an agent on any configured host blocks or finishes a turn. The banner names the agent, project and host, and shows the blocked question when Ops read one. A click focuses the pane and reveals the iTerm session showing it. While banners are on, the [herdr-notify](https://github.com/gAmUssA/herdr-notify) plugin sees `X-Ops-Banners: on` on `/healthz` and stays silent. Only sockets listed in `ops.toml` are watched: give each named Herdr session its own `[[hosts]]` entry. Design: [docs/adr/0002-desktop-banners.md](docs/adr/0002-desktop-banners.md).
+Set `[banners] enabled = true` in `ops.toml` (needs `brew install vjeantet/tap/alerter`) and Ops raises a macOS banner whenever an agent on any configured host blocks or finishes a turn you were not watching (Herdr `done`; a turn that ends in the focused pane stays quiet). The banner names the agent, project and host, and shows the blocked question when Ops read one. A click focuses the pane and reveals the iTerm session showing it. While banners are on, the [herdr-notify](https://github.com/gAmUssA/herdr-notify) plugin sees `X-Ops-Banners: on` on `/healthz` and stays silent. Only sockets listed in `ops.toml` are watched: give each named Herdr session its own `[[hosts]]` entry. Design: [docs/adr/0002-desktop-banners.md](docs/adr/0002-desktop-banners.md).
 
 ### Inbox Key
 

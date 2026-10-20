@@ -13,7 +13,7 @@ ADR 0001 says Ops "normalises and relays only; it never re-implements Herdr CLI 
 
 ## Decision
 
-- Ops raises banners (`[banners] enabled = true` in `ops.toml`, off by default) through `alerter` on the same transitions as the done ping: entering `blocked`, or `working` → `idle`/`done`, with a reconnect backlog folded in silently. One alerter group per session; the blocked question is the message when Ops read one. Code: `banners.rs`.
+- Ops raises banners (`[banners] enabled = true` in `ops.toml`, off by default) through `alerter` when an agent enters `blocked` or goes `working` → `done`, with a reconnect backlog folded in silently. One alerter group per session; the blocked question is the message when Ops read one. Unlike the done ping, `working` → `idle` does not raise a banner: Herdr reports `idle` for a turn that finished in the pane you are looking at, and herdr-notify never notified for those either. Code: `banners.rs`.
 - A banner click focuses the pane through `ActionRelay`, so remote panes work, then reveals the terminal.
 - Ops reveals the iTerm session hosting a local host's Herdr client after every `focus` action (`reveal.rs`, ported from herdr-notify's `focus.py`). The action response carries `revealed`; the plugin raises iTerm with osascript only when it is false (remote hosts, no attached client).
 - Ops advertises banner ownership with `X-Ops-Banners: on` on `/healthz`. herdr-notify checks it and stays silent. Ops that is merely up does not silence herdr-notify. The header reveals nothing beyond that flag, so `/healthz` stays the one unauthenticated endpoint.

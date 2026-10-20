@@ -1,7 +1,9 @@
 //! Desktop banners when an agent blocks or finishes a turn, on any host.
 //!
-//! Same transitions as the plugin's done ping (`core/transitions.ts`,
-//! `core/ping-baseline.ts`): entering `blocked`, or `working` → `idle`/`done`.
+//! Close to the plugin's done ping (`core/transitions.ts`,
+//! `core/ping-baseline.ts`): entering `blocked`, or `working` → `done`. Unlike
+//! the ping, `working` → `idle` does not ring: Herdr reports `idle` for a turn
+//! that finished in the pane you are looking at, and a banner for that is noise.
 //! A host's first frame with sessions after it (re)connects is a backlog and
 //! only primes the baseline. Banners go through `alerter`; a click focuses the
 //! pane through the action relay and reveals its iTerm session, so a banner
@@ -40,9 +42,7 @@ pub fn detect_flips(prev: &[Session], next: &[Session]) -> Vec<Flip> {
             let was = before.get(s.id.as_str()).copied();
             let kind = match s.state {
                 AgentState::Blocked if was != Some(AgentState::Blocked) => FlipKind::Blocked,
-                AgentState::Idle | AgentState::Done if was == Some(AgentState::Working) => {
-                    FlipKind::Done
-                }
+                AgentState::Done if was == Some(AgentState::Working) => FlipKind::Done,
                 _ => return None,
             };
             Some(Flip {
@@ -353,6 +353,7 @@ mod tests {
             session("a", "p2", AgentState::Working),
             session("a", "p3", AgentState::Blocked),
             session("a", "p4", AgentState::Idle),
+            session("a", "p7", AgentState::Working),
         ];
         let next = vec![
             session("a", "p1", AgentState::Blocked),
@@ -361,6 +362,8 @@ mod tests {
             session("a", "p4", AgentState::Idle),
             session("a", "p5", AgentState::Idle),
             session("a", "p6", AgentState::Blocked),
+            // Finished in the pane you are watching: Herdr says idle, not done.
+            session("a", "p7", AgentState::Idle),
         ];
         let flips: Vec<_> = detect_flips(&prev, &next)
             .into_iter()
