@@ -6,10 +6,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::{bail, Context, Result};
 use ops::actions::ActionRelay;
+use ops::banners::{Baseline, Notifier};
 use ops::config::{self, Config};
 use ops::herdr::client::HostClient;
 use ops::model::{Fleet, HostEvent};
-use ops::server::{self, FleetView};
+use ops::reveal::Revealer;
+use ops::server::{self, FleetView, ServeOptions};
 use tokio::net::TcpListener;
 use tokio::sync::{broadcast, mpsc, watch};
 use tracing::{info, warn};
@@ -110,7 +112,11 @@ async fn run(config_path: PathBuf) -> Result<()> {
     let (event_tx, mut event_rx) = mpsc::channel::<(String, HostEvent)>(256);
 
     let mut transports = std::collections::HashMap::new();
+    let mut local_sockets = std::collections::HashMap::new();
     for host in &config.hosts {
+        if let Some(socket) = &host.socket {
+            local_sockets.insert(host.name.clone(), config::expand_tilde(socket));
+        }
         let transport = host
             .transport(&state_dir)
             .with_context(|| format!("host `{}`", host.name))?;
@@ -120,10 +126,27 @@ async fn run(config_path: PathBuf) -> Result<()> {
     }
     drop(event_tx);
     let relay = Arc::new(ActionRelay::new(transports));
+    let revealer = Arc::new(Revealer::new(local_sockets));
+    let notifier = Notifier::from_config(
+        &config.banners,
+        view_rx.clone(),
+        relay.clone(),
+        revealer.clone(),
+    )?;
+    let mut baseline = Baseline::default();
+    if notifier.is_some() {
+        info!("desktop banners on; herdr-notify will defer");
+    }
+    let options = ServeOptions {
+        banners: notifier.is_some(),
+        revealer,
+    };
 
     let serve_updates = updates.clone();
     tokio::spawn(async move {
-        if let Err(err) = server::serve(listener, view_rx, serve_updates, relay, &token).await {
+        if let Err(err) =
+            server::serve(listener, view_rx, serve_updates, relay, &token, options).await
+        {
             warn!(%err, "plugin server stopped");
         }
     });
@@ -140,7 +163,12 @@ async fn run(config_path: PathBuf) -> Result<()> {
                 let Some((host, event)) = next else { bail!("all host clients stopped") };
                 log_event(&host, &event);
                 if fleet.apply(&host, event, now_ms()) {
-                    server::publish(&view_tx, &updates, Arc::new(FleetView::from_fleet(&fleet)));
+                    let view = Arc::new(FleetView::from_fleet(&fleet));
+                    if let Some(notifier) = &notifier {
+                        let flips = baseline.advance(&view);
+                        notifier.show(flips, view.hosts.len() > 1);
+                    }
+                    server::publish(&view_tx, &updates, view);
                 }
             }
         }

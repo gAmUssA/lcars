@@ -34,11 +34,16 @@ function serve(status: number, reply: string): Promise<{ url: string; seen: Seen
 
 test("focus posts the session id to /actions", async () => {
   const { url, seen } = await serve(200, '{"ok":true}');
-  await createOpsActions({ url }).focus("mini/w7:p1");
+  expect(await createOpsActions({ url }).focus("mini/w7:p1")).toBe(false);
   expect(seen).toHaveLength(1);
   expect(seen[0].method).toBe("POST");
   expect(seen[0].url).toBe("/actions");
   expect(JSON.parse(seen[0].body)).toEqual({ action: "focus", session: "mini/w7:p1" });
+});
+
+test("focus reports whether Ops revealed the iTerm session", async () => {
+  const { url } = await serve(200, '{"ok":true,"revealed":true}');
+  expect(await createOpsActions({ url }).focus("studio/w1:p1")).toBe(true);
 });
 
 test("a failure surfaces the status and Ops's error text", async () => {

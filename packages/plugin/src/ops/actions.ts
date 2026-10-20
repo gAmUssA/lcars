@@ -4,7 +4,8 @@
 import { authHeaders } from "./token";
 
 export type OpsActions = {
-  focus(sessionId: string): Promise<void>;
+  /** Focus the pane. Resolves true when Ops also revealed its iTerm session; otherwise raise the terminal yourself. */
+  focus(sessionId: string): Promise<boolean>;
   /** Scroll the pane by `delta` rows (positive = up into scrollback). Resolves to the applied offset. */
   scroll(sessionId: string, delta: number): Promise<number>;
   /** Submit `text` plus Enter to the agent in the pane. */
@@ -50,7 +51,8 @@ export function createOpsActions(opts: { url: string; token?: () => string | nul
 
   return {
     focus: async (sessionId) => {
-      await send({ action: "focus", session: sessionId });
+      const result = await send({ action: "focus", session: sessionId });
+      return result.revealed === true;
     },
     scroll: async (sessionId, delta) => {
       const result = await send({ action: "scroll", session: sessionId, delta });

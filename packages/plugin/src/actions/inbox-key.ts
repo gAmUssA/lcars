@@ -96,15 +96,18 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
       await this.conn(session, ev.action);
       return;
     }
+    let revealed: boolean;
     try {
-      await this.ops.focus(session.id);
+      revealed = await this.ops.focus(session.id);
     } catch (e) {
       streamDeck.logger.error(`focus ${session.id} failed: ${String(e)}`);
       await ev.action.showAlert();
       return;
     }
-    // Raise the terminal so the focused pane is on screen; a raise failure
-    // must not mask the successful focus.
+    // Ops already put the pane's iTerm session on screen (local host).
+    if (revealed) return;
+    // Otherwise raise the terminal so the focused pane is on screen; a raise
+    // failure must not mask the successful focus.
     try {
       await this.terminal.activate();
     } catch (e) {

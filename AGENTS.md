@@ -22,6 +22,7 @@ Stream Deck console for coding agents. Read `docs/HANDOFF.md` before changing ar
 - Subscribe to events (`events.subscribe`; `pane.agent_status_changed` needs a `pane_id` per pane). Never poll the CLI or socket for state.
 - One request per connection except the subscription; follow-up reads (`pane.get`, `agent.get`, `agent.read`) run off the event loop.
 - Ops never re-implements what Herdr CLI or the forked plugin already does. It normalises, merges, and relays actions only.
+- Two exceptions, both outside Herdr's domain (ADR 0002): Ops raises desktop banners (`[banners]`) and reveals the iTerm session hosting a local Herdr client after `focus`. `/healthz` carries `X-Ops-Banners: on` while banners are on, and herdr-notify defers to it.
 - Confirm CLI verbs and socket schema from `herdr --help` and `docs/herdr-api.md`, not from memory. Recorded frames in `docs/fixtures/` are the Ops test fixtures.
 
 ## Input rules

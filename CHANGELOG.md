@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Ops desktop banners (`[banners]` in `ops.toml`, off by default): one `alerter` banner when an agent on any host blocks or finishes a turn; a click focuses the pane and reveals its iTerm session. While on, `/healthz` sends `X-Ops-Banners: on` and herdr-notify stays silent, so each event rings once. ADR 0002.
+- `focus` reveals the iTerm session showing a local host's Herdr client (`iterm2:reveal`, no Automation consent) and returns `revealed`; the plugin raises iTerm with osascript only when Ops could not.
+
 ## 0.1.1 — 2026-10-19
 
 - One version everywhere: Ops crate, plugin package and Stream Deck manifest (previously `0.4.0.0`) now carry the release number; `scripts/check-versions.sh` enforces it in `make test` and the release workflow refuses a tag that disagrees.

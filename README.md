@@ -139,9 +139,13 @@ npm run restart           # after each build
 
 Plugin logs land in `packages/plugin/io.gamov.lcars.sdPlugin/logs/`. The property inspector's **Ops address** is global and defaults to `http://127.0.0.1:7677`.
 
+### Desktop banners
+
+Set `[banners] enabled = true` in `ops.toml` (needs `brew install vjeantet/tap/alerter`) and Ops raises a macOS banner whenever an agent on any configured host blocks or finishes a turn. The banner names the agent, project and host, and shows the blocked question when Ops read one. A click focuses the pane and reveals the iTerm session showing it. While banners are on, the [herdr-notify](https://github.com/gAmUssA/herdr-notify) plugin sees `X-Ops-Banners: on` on `/healthz` and stays silent. Only sockets listed in `ops.toml` are watched: give each named Herdr session its own `[[hosts]]` entry. Design: [docs/adr/0002-desktop-banners.md](docs/adr/0002-desktop-banners.md).
+
 ### Inbox Key
 
-One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most recently changed). Colour is the agent state (orange working, red blocked, green done, grey idle; `done` is a turn that finished while nobody was looking at the pane, cleared when it is focused), the badge is the agent kind, the corner tag is the host when more than one host is online, the text is the pane title, or the question the agent is asking while it is blocked. Short tap focuses the pane through Ops and raises iTerm2. Long press is Conn, below.
+One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most recently changed). Colour is the agent state (orange working, red blocked, green done, grey idle; `done` is a turn that finished while nobody was looking at the pane, cleared when it is focused), the badge is the agent kind, the corner tag is the host when more than one host is online, the text is the pane title, or the question the agent is asking while it is blocked. Short tap focuses the pane through Ops, which reveals the iTerm2 session showing it; iTerm2 is raised with AppleScript only when Ops could not (remote hosts). Long press is Conn, below.
 
 ### Conn and the done ping
 

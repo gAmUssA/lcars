@@ -33,7 +33,7 @@ test("a press acts on the session shown at key down, even if the deck reorders d
   store.setView({ workspaces: [], hosts: [], sessions: [mk("mini/w7:p1", "blocked", 1), mk("studio/w1:p1", "idle", 2)] });
   const sent: [string, string[]][] = [];
   let now = 1000;
-  const ops = { focus: async () => {}, scroll: async () => 0, prompt: async () => {}, sendKeys: async (id: string, keys: string[]) => { sent.push([id, keys]); }, focusWorkspace: async () => {} };
+  const ops = { focus: async () => false, scroll: async () => 0, prompt: async () => {}, sendKeys: async (id: string, keys: string[]) => { sent.push([id, keys]); }, focusWorkspace: async () => {} };
   const action = new InboxKeyAction(store, ops, { activate: async () => {} }, () => now);
   const alerts: string[] = [];
   const ev = (settings: object) => ({ action: { id: "k1", showAlert: async () => { alerts.push("alert"); }, showOk: async () => {} }, payload: { settings } }) as never;
@@ -54,7 +54,7 @@ test("a press acts on the session shown at key down, even if the deck reorders d
 
 test("conn confirms only blocked sessions", async () => {
   const sent: [string, string[]][] = [];
-  const ops = { focus: async () => {}, scroll: async () => 0, prompt: async () => {}, sendKeys: async (id: string, keys: string[]) => { sent.push([id, keys]); }, focusWorkspace: async () => {} };
+  const ops = { focus: async () => false, scroll: async () => 0, prompt: async () => {}, sendKeys: async (id: string, keys: string[]) => { sent.push([id, keys]); }, focusWorkspace: async () => {} };
   const action = new InboxKeyAction(createFleetStore(), ops, { activate: async () => {} });
   const feedback: string[] = [];
   const ui = { showAlert: async () => { feedback.push("alert"); }, showOk: async () => { feedback.push("ok"); } };
@@ -63,6 +63,21 @@ test("conn confirms only blocked sessions", async () => {
   await action.conn({ id: "h/p2", state: "blocked" }, ui);
   expect(sent).toEqual([["h/p2", ["enter"]]]);
   expect(feedback).toEqual(["alert", "ok"]);
+});
+
+test("a short tap raises the terminal only when Ops did not reveal the pane", async () => {
+  const store = createFleetStore();
+  const session = { id: "studio/w1:p1", host: "studio", workspace_id: "w1", tab_id: "w1:t1", pane_id: "w1:p1", agent: "claude", name: null, state: "idle", title: null, cwd: null, model: null, summary: null, pending_prompt: null, focused: false, seq: 0, updated_at_ms: 1 } as const;
+  store.setView({ workspaces: [], hosts: [], sessions: [session] });
+  const ev = { action: { id: "k1", showAlert: async () => {}, showOk: async () => {} }, payload: { settings: { slotIndex: "0" } } } as never;
+  for (const revealed of [true, false]) {
+    let raised = 0;
+    const ops = { focus: async () => revealed, scroll: async () => 0, prompt: async () => {}, sendKeys: async () => {}, focusWorkspace: async () => {} };
+    const action = new InboxKeyAction(store, ops, { activate: async () => { raised++; } }, () => 0);
+    action.onKeyDown(ev);
+    await action.onKeyUp(ev);
+    expect(raised).toBe(revealed ? 0 : 1);
+  }
 });
 
 test("action uuid matches the manifest", () => {

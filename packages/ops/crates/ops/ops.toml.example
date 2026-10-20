@@ -8,6 +8,16 @@
 # network interface.
 listen = "127.0.0.1:7677"
 
+# Desktop banners when an agent blocks or finishes a turn, for every host
+# below; clicking one focuses the pane and reveals its iTerm session. Needs
+# `alerter` (brew install vjeantet/tap/alerter). While enabled, Ops tells the
+# herdr-notify plugin to stay silent so each event rings once.
+[banners]
+enabled = false
+# alerter = "/opt/homebrew/bin/alerter"
+# icon = "~/Pictures/lcars.png"
+# sound = true
+
 # Local host: connect straight to the Herdr socket on this machine.
 [[hosts]]
 name = "studio"

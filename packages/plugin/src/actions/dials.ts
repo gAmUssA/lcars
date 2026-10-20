@@ -82,8 +82,7 @@ abstract class StripDial extends SingletonAction {
 
   protected async focus(sessionId: string): Promise<void> {
     try {
-      await this.deps.ops.focus(sessionId);
-      await this.deps.terminal.activate();
+      if (!(await this.deps.ops.focus(sessionId))) await this.deps.terminal.activate();
     } catch (e) {
       streamDeck.logger.error(`focus ${sessionId} failed: ${String(e)}`);
     }

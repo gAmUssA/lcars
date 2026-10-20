@@ -1,6 +1,7 @@
 //! Plugin-facing server on loopback: `GET /sessions` for a snapshot,
 //! `GET /ws` for a push stream, `POST /actions` to relay key presses,
-//! `GET /healthz` unauthenticated.
+//! `GET /healthz` unauthenticated. When Ops owns desktop banners, `/healthz`
+//! carries `X-Ops-Banners: on` so herdr-notify knows to stay silent.
 //!
 //! Everything but `/healthz` requires `Authorization: Bearer <token>`; the
 //! token lives in a 0600 file under the state dir that only the same user
@@ -29,6 +30,7 @@ use tracing::{debug, info, warn};
 
 use crate::actions::ActionRelay;
 use crate::model::{AgentState, Fleet, HostStatus, Session, Workspace};
+use crate::reveal::Revealer;
 
 /// What the plugin receives: hosts plus sessions in display order.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -63,23 +65,53 @@ struct AppState {
     fleet: FleetRx,
     updates: Updates,
     relay: Arc<ActionRelay>,
+    revealer: Arc<Revealer>,
     token: Arc<str>,
 }
 
-pub fn router(fleet: FleetRx, updates: Updates, relay: Arc<ActionRelay>, token: &str) -> Router {
+/// What the server offers beyond the fleet and the relay.
+#[derive(Clone, Default)]
+pub struct ServeOptions {
+    /// Ops raises desktop banners; advertised on `/healthz`.
+    pub banners: bool,
+    /// Puts a focused local pane on screen after `focus`.
+    pub revealer: Arc<Revealer>,
+}
+
+/// Header on `/healthz` that tells herdr-notify Ops owns banners.
+pub const BANNERS_HEADER: &str = "x-ops-banners";
+
+pub fn router(
+    fleet: FleetRx,
+    updates: Updates,
+    relay: Arc<ActionRelay>,
+    token: &str,
+    options: ServeOptions,
+) -> Router {
     let state = AppState {
         fleet,
         updates,
         relay,
+        revealer: options.revealer,
         token: Arc::from(token),
     };
+    let banners = options.banners;
     let protected = Router::new()
         .route("/sessions", get(sessions))
         .route("/actions", post(actions))
         .route("/ws", get(ws_upgrade))
         .layer(middleware::from_fn_with_state(state.clone(), require_token));
     Router::new()
-        .route("/healthz", get(|| async { "ok" }))
+        .route(
+            "/healthz",
+            get(move || async move {
+                if banners {
+                    ([(BANNERS_HEADER, "on")], "ok").into_response()
+                } else {
+                    "ok".into_response()
+                }
+            }),
+        )
         .merge(protected)
         .with_state(state)
 }
@@ -91,9 +123,10 @@ pub async fn serve(
     updates: Updates,
     relay: Arc<ActionRelay>,
     token: &str,
+    options: ServeOptions,
 ) -> std::io::Result<()> {
     info!(addr = %listener.local_addr()?, "serving plugin API");
-    axum::serve(listener, router(fleet, updates, relay, token)).await
+    axum::serve(listener, router(fleet, updates, relay, token, options)).await
 }
 
 /// Path of the API token file inside the state dir.
@@ -144,6 +177,7 @@ async fn require_token(State(state): State<AppState>, request: Request, next: Ne
                 "missing or wrong bearer token; Ops writes it to <state dir>/token".to_string(),
             ),
             offset_from_bottom: None,
+            revealed: None,
         }),
     )
         .into_response()
@@ -179,6 +213,10 @@ pub struct ActionResponse {
     /// `scroll`: the offset from bottom that was applied.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub offset_from_bottom: Option<u64>,
+    /// `focus`: whether Ops revealed the iTerm session showing the pane. When
+    /// false the caller raises the terminal app itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub revealed: Option<bool>,
 }
 
 fn action_error(status: StatusCode, error: String) -> (StatusCode, Json<ActionResponse>) {
@@ -188,6 +226,7 @@ fn action_error(status: StatusCode, error: String) -> (StatusCode, Json<ActionRe
             ok: false,
             error: Some(error),
             offset_from_bottom: None,
+            revealed: None,
         }),
     )
 }
@@ -237,8 +276,21 @@ async fn actions(
             );
         }
     }
+    let mut revealed = None;
     let result: anyhow::Result<Option<u64>> = match request.action.as_str() {
-        "focus" => state.relay.focus(&session).await.map(|()| None),
+        "focus" => match state.relay.focus(&session).await {
+            Ok(()) => {
+                revealed = Some(match state.revealer.reveal(&session.host).await {
+                    Ok(done) => done,
+                    Err(err) => {
+                        warn!(session = %session.id, error = %format!("{err:#}"), "reveal failed");
+                        false
+                    }
+                });
+                Ok(None)
+            }
+            Err(err) => Err(err),
+        },
         "scroll" => match request.delta {
             Some(delta) => state.relay.scroll(&session, delta).await.map(Some),
             None => {
@@ -291,6 +343,7 @@ async fn actions(
                     ok: true,
                     error: None,
                     offset_from_bottom,
+                    revealed,
                 }),
             )
         }
@@ -333,6 +386,7 @@ async fn focus_workspace(state: &AppState, id: &str) -> (StatusCode, Json<Action
                     ok: true,
                     error: None,
                     offset_from_bottom: None,
+                    revealed: None,
                 }),
             )
         }
@@ -508,6 +562,10 @@ mod tests {
     static NEXT_SOCKET: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 
     async fn start() -> Harness {
+        start_with(ServeOptions::default()).await
+    }
+
+    async fn start_with(options: ServeOptions) -> Harness {
         let fleet = fleet_with_one_blocked_session();
         let (tx, rx) = watch::channel(Arc::new(FleetView::from_fleet(&fleet)));
         let (updates, _) = broadcast::channel(UPDATE_BUFFER);
@@ -527,7 +585,9 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let serve_updates = updates.clone();
-        tokio::spawn(async move { serve(listener, rx, serve_updates, relay, TOKEN).await });
+        tokio::spawn(
+            async move { serve(listener, rx, serve_updates, relay, TOKEN, options).await },
+        );
         Harness {
             addr,
             tx,
@@ -622,6 +682,34 @@ mod tests {
         assert_eq!(status, 401);
     }
 
+    async fn healthz_raw(addr: std::net::SocketAddr) -> String {
+        let mut stream = tokio::net::TcpStream::connect(addr).await.unwrap();
+        stream
+            .write_all(
+                format!("GET /healthz HTTP/1.1\r\nHost: {addr}\r\nConnection: close\r\n\r\n")
+                    .as_bytes(),
+            )
+            .await
+            .unwrap();
+        let mut raw = String::new();
+        stream.read_to_string(&mut raw).await.unwrap();
+        raw.to_ascii_lowercase()
+    }
+
+    #[tokio::test]
+    async fn healthz_advertises_banners_only_when_ops_owns_them() {
+        let off = start().await;
+        assert!(!healthz_raw(off.addr).await.contains("x-ops-banners"));
+        let on = start_with(ServeOptions {
+            banners: true,
+            ..ServeOptions::default()
+        })
+        .await;
+        let raw = healthz_raw(on.addr).await;
+        assert!(raw.contains("\r\nx-ops-banners: on\r\n"), "{raw}");
+        assert!(raw.ends_with("\r\n\r\nok"), "{raw}");
+    }
+
     #[tokio::test]
     async fn focus_action_relays_agent_focus_to_the_owning_host() {
         let mut h = start().await;
@@ -629,6 +717,8 @@ mod tests {
             post_action(h.addr, r#"{"action":"focus","session":"mini/w7:p1"}"#).await;
         assert_eq!(status, 200, "{json}");
         assert_eq!(json["ok"], true);
+        // No local socket configured for the revealer: the plugin raises the app.
+        assert_eq!(json["revealed"], false);
         let req = h.herdr_requests.recv().await.unwrap();
         assert_eq!(req["method"], "agent.focus");
         assert_eq!(req["params"]["target"], "w7:p1");

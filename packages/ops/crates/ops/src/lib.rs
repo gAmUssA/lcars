@@ -5,9 +5,11 @@
 //! WebSocket. See `docs/HANDOFF.md` and `docs/herdr-api.md` in the repo.
 
 pub mod actions;
+pub mod banners;
 pub mod config;
 pub mod herdr;
 pub mod model;
+pub mod reveal;
 pub mod server;
 
 /// Herdr private protocol this build speaks. Checked against every host's

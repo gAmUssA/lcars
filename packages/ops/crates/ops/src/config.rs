@@ -24,6 +24,41 @@ pub struct Config {
     pub allow_remote_listen: bool,
     #[serde(default)]
     pub hosts: Vec<HostConfig>,
+    #[serde(default)]
+    pub banners: BannersConfig,
+}
+
+/// Desktop banners for blocked and finished agents (`[banners]`). Off by
+/// default: with it on, Ops tells herdr-notify to stay silent (see
+/// `docs/adr/0002-desktop-banners.md`).
+#[derive(Debug, Clone, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct BannersConfig {
+    #[serde(default)]
+    pub enabled: bool,
+    /// Path to `alerter`. Default: PATH, then the Homebrew prefixes, because
+    /// launchd starts Ops with a minimal PATH.
+    pub alerter: Option<String>,
+    /// Image shown on the banner.
+    pub icon: Option<String>,
+    /// Play Funk (blocked) or Glass (done) with the banner.
+    #[serde(default = "default_true")]
+    pub sound: bool,
+}
+
+impl Default for BannersConfig {
+    fn default() -> Self {
+        BannersConfig {
+            enabled: false,
+            alerter: None,
+            icon: None,
+            sound: true,
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
@@ -239,6 +274,28 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains("duplicate host name"), "{err}");
+    }
+
+    #[test]
+    fn banners_default_off_with_sound() {
+        let config = parse("[[hosts]]\nname = \"a\"\nsocket = \"/s\"\n").unwrap();
+        assert_eq!(config.banners, BannersConfig::default());
+        assert!(!config.banners.enabled);
+        assert!(config.banners.sound);
+    }
+
+    #[test]
+    fn banners_section_parses_and_rejects_typos() {
+        let config = parse(
+            "[banners]\nenabled = true\nsound = false\nalerter = \"/x/alerter\"\n[[hosts]]\nname = \"a\"\nsocket = \"/s\"\n",
+        )
+        .unwrap();
+        assert!(config.banners.enabled);
+        assert!(!config.banners.sound);
+        assert_eq!(config.banners.alerter.as_deref(), Some("/x/alerter"));
+        assert!(
+            parse("[banners]\nenable = true\n[[hosts]]\nname = \"a\"\nsocket = \"/s\"\n").is_err()
+        );
     }
 
     #[test]
