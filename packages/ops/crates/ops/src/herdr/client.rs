@@ -413,7 +413,18 @@ pub fn dispatch(frame: Frame) -> Option<HostEvent> {
             | EventData::WorkspaceFocused { .. } => Some(HostEvent::WorkspacesChanged),
             _ => None,
         },
-        Frame::Response(_) | Frame::Error(_) | Frame::Unknown(_) => None,
+        Frame::Error(err) => {
+            // Herdr closes the connection after an error on the stream
+            // (`events_lost` when a subscriber falls behind its 512-event
+            // history); the session loop reconnects and re-snapshots.
+            warn!(
+                code = %err.error.code,
+                message = %err.error.message,
+                "herdr error on the event stream"
+            );
+            None
+        }
+        Frame::Response(_) | Frame::Unknown(_) => None,
     }
 }
 
