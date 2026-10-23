@@ -4,22 +4,24 @@ Stream Deck console for coding agents, backed by [Herdr](https://herdr.dev). The
 
 | Package | What | Stack |
 | --- | --- | --- |
-| `packages/ops` | Ops, the daemon. One Herdr socket per host, merged into one session list, serves the plugin | Rust (cargo workspace) |
+| `packages/ops` | Ops, the daemon. One connection per Herdr session, merged into one fleet of sessions, workspaces and panes, serves the plugin | Rust (cargo workspace) |
 | `packages/plugin` | LCARS, the Stream Deck plugin. Paints keys, dials and the touch strip; forwards presses to Ops | TypeScript, `@elgato/streamdeck` |
 
 Recon notes on the Herdr socket API, with recorded frames as test fixtures: [docs/herdr-api.md](docs/herdr-api.md).
 
+Names follow Herdr. A **machine** is a computer Ops reaches directly or over SSH. A **session** is one Herdr server on a machine (`herdr` starts `default`, `herdr --session NAME` a named one; `herdr session list` shows them). A session holds **workspaces**, a workspace holds **panes**, and a pane may run an **agent**. Ops connects to each session listed in `ops.toml`; the deck shows them as Session Keys, Workspace Keys and agent (Inbox) keys. Design: [docs/adr/0003-herdr-naming-and-session-filters.md](docs/adr/0003-herdr-naming-and-session-filters.md).
+
 ## Screenshots
 
-Stream Deck XL, agent wall page: one key per agent across both hosts (host tag top-right, agent logo, state colour, pane title), workspace keys, the global keys and the third-party usage keys.
+Stream Deck XL, agent wall page: one key per agent across every session (session tag top-right, agent logo, state colour, pane title), workspace keys, the global keys and the third-party usage keys.
 
 ![Stream Deck app showing the XL LCARS page](docs/images/stream-deck-xl-wall.png)
 
-Stream Deck +: eight paged Inbox Keys, the fleet bar on the touch strip (one block per host, page and effort read-outs) and the four dials.
+Stream Deck +: eight paged Inbox Keys, the fleet bar on the touch strip (one block per session, page and effort read-outs) and the four dials.
 
 ![Stream Deck app showing the Plus LCARS page](docs/images/stream-deck-plus.png)
 
-15-key MK.2, travel page: six Inbox Keys, Attach keys for the local Herdr and the remote host over mosh and tmux, Dictate, Stop All and Mute Bell.
+15-key MK.2, travel page: six Inbox Keys, Attach keys for the local Herdr and the remote machine over mosh and tmux, Dictate, Stop All and Mute Bell.
 
 ![Stream Deck app showing the MK.2 LCARS travel page](docs/images/stream-deck-mk2-travel.png)
 
@@ -28,7 +30,7 @@ Stream Deck +: eight paged Inbox Keys, the fleet bar on the touch strip (one blo
 | Milestone | State |
 | --- | --- |
 | 1. Recon of the Herdr socket API | done |
-| 2. Ops v0: per-host event subscriptions, merged `FleetView`, loopback HTTP + WebSocket | done |
+| 2. Ops v0: per-session event subscriptions, merged `FleetView`, loopback HTTP + WebSocket | done |
 | 3. Plugin v0: Inbox Key on the Stream Deck +, tap focuses the pane | done |
 | 4. Plus dials and touch strip | done |
 | 5. Conn (long-press confirm), done ping | done; Claude Code hooks deferred (Herdr events are the signal) |
@@ -39,9 +41,9 @@ Stream Deck +: eight paged Inbox Keys, the fleet bar on the touch strip (one blo
 ## Requirements
 
 - macOS, Stream Deck app 7.1+ (developed on 7.6), a Stream Deck +, XL or 15-key MK.2
-- [Herdr](https://herdr.dev) 0.9.x on every host (protocol 22)
+- [Herdr](https://herdr.dev) 0.9.x on every machine (protocol 22)
 - Building from source: Rust stable (`cargo`), Node 20.5+, `npm i -g @elgato/cli` for packing or linking the plugin
-- Remote hosts: SSH alias in `~/.ssh/config`, reachable over Tailscale
+- Remote machines: SSH alias in `~/.ssh/config`, reachable over Tailscale
 
 ## Install
 
@@ -65,8 +67,8 @@ From a fresh clone on the Mac the decks are plugged into:
 ```sh
 make build            # cargo build --release + npm ci + plugin bundle
 make install          # ~/.local/bin/ops, ~/.config/ops/ops.toml (if absent), launchd plist (not loaded)
-$EDITOR ~/.config/ops/ops.toml   # one [[hosts]] block per machine
-ssh -fNM -o ControlPath=~/.ssh/cm-<alias> -o ControlPersist=8h <alias>   # once per remote host, after login
+$EDITOR ~/.config/ops/ops.toml   # one [[sessions]] block per Herdr session
+ssh -fNM -o ControlPath=~/.ssh/cm-<alias> -o ControlPersist=8h <alias>   # once per remote machine, after login
 make start            # loads io.gamov.lcars.ops: runs now and at every login
 make pack             # packages/plugin/dist/io.gamov.lcars.streamDeckPlugin, double-click to install
 ```
@@ -99,8 +101,8 @@ Claude Code-only controls (the Effort dial) act on Claude panes alone.
 
 - Ops listens on loopback only; `allow_remote_listen = true` is required to bind anything else, and the config refuses otherwise.
 - Every endpoint except `/healthz` needs `Authorization: Bearer <token>`. Ops writes the token to `~/.local/state/ops/token` (mode 0600, `OPS_STATE_DIR` overrides) and the plugin reads it as the same user. Loopback is shared by every account on a Mac; the token is what keeps another local user from pressing keys in your agents.
-- `send_keys` relays confirming keys (Enter and the like) only to a `blocked` session; Escape and Ctrl-C pass in any state. Conn in the plugin adds the long-press requirement on top.
-- Actions on a disconnected host are refused with 503, and the keys dim so a stale colour is not mistaken for a reading.
+- `send_keys` relays confirming keys (Enter and the like) only to a `blocked` pane; Escape and Ctrl-C pass in any state. Conn in the plugin adds the long-press requirement on top.
+- Actions on a disconnected session are refused with 503, and the keys dim so a stale colour is not mistaken for a reading.
 
 ## Build
 
@@ -114,12 +116,12 @@ cd packages/plugin && npm ci && npm run typecheck && npm test
 ```sh
 cd packages/ops
 mkdir -p ~/.config/ops && cargo run -q -- --print-default-config > ~/.config/ops/ops.toml
-# edit hosts, then:
+# edit the [[sessions]], then:
 cargo run -q
-curl -s http://127.0.0.1:7677/sessions | jq .
+curl -s -H "Authorization: Bearer $(cat ~/.local/state/ops/token)" http://127.0.0.1:7677/fleet | jq .
 ```
 
-Remote hosts ride an SSH ControlMaster you open once after login (1Password holds the keys, Ops never prompts):
+Sessions on another machine ride an SSH ControlMaster you open once after login (1Password holds the keys, Ops never prompts); every session on that machine shares it:
 
 ```sh
 ssh -fNM -o ControlPath=~/.ssh/cm-mini -o ControlPersist=8h mini
@@ -141,11 +143,11 @@ Plugin logs land in `packages/plugin/io.gamov.lcars.sdPlugin/logs/`. The propert
 
 ### Desktop banners
 
-Set `[banners] enabled = true` in `ops.toml` (needs `brew install vjeantet/tap/alerter`) and Ops raises a macOS banner whenever an agent on any configured host blocks or finishes a turn you were not watching (Herdr `done`; a turn that ends in the focused pane stays quiet). The banner names the agent, project and host, and shows the blocked question when Ops read one. A click focuses the pane and reveals the iTerm session showing it. While banners are on, the [herdr-notify](https://github.com/gAmUssA/herdr-notify) plugin sees `X-Ops-Banners: on` on `/healthz` and stays silent. Only sockets listed in `ops.toml` are watched: give each named Herdr session its own `[[hosts]]` entry. Design: [docs/adr/0002-desktop-banners.md](docs/adr/0002-desktop-banners.md).
+Set `[banners] enabled = true` in `ops.toml` (needs `brew install vjeantet/tap/alerter`) and Ops raises a macOS banner whenever an agent in any configured session blocks or finishes a turn you were not watching (Herdr `done`; a turn that ends in the focused pane stays quiet). The banner names the agent, project and session, and shows the blocked question when Ops read one. A click focuses the pane and reveals the iTerm session showing it. While banners are on, the [herdr-notify](https://github.com/gAmUssA/herdr-notify) plugin sees `X-Ops-Banners: on` on `/healthz` and stays silent. Only sessions listed in `ops.toml` are watched: give each named Herdr session its own `[[sessions]]` entry. Design: [docs/adr/0002-desktop-banners.md](docs/adr/0002-desktop-banners.md).
 
 ### Inbox Key
 
-One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most recently changed). Colour is the agent state (orange working, red blocked, green done, grey idle; `done` is a turn that finished while nobody was looking at the pane, cleared when it is focused), the badge is the agent kind, the corner tag is the host when more than one host is online, the text is the pane title, or the question the agent is asking while it is blocked. Short tap focuses the pane through Ops, which reveals the iTerm2 session showing it; iTerm2 is raised with AppleScript only when Ops could not (remote hosts). Long press is Conn, below.
+One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most recently changed). Colour is the agent state (orange working, red blocked, green done, grey idle; `done` is a turn that finished while nobody was looking at the pane, cleared when it is focused), the badge is the agent kind, the corner tag is the session when more than one is configured, the text is the pane title, or the question the agent is asking while it is blocked. Short tap focuses the pane through Ops, which reveals the iTerm2 session showing it; iTerm2 is raised with AppleScript only when Ops could not (remote sessions). Long press is Conn, below.
 
 ### Conn and the done ping
 
@@ -153,15 +155,21 @@ One Herdr agent pane per key, slot 1 = most urgent (blocked first, then most rec
 - **Conn** is a long press (400 ms or more) on an Inbox Key whose agent is `blocked`: Ops presses Enter in that pane, which confirms whatever the agent's dialog has highlighted. A short tap never does this; a long press on a non-blocked key only blinks.
 - **Done ping**: when an agent enters `blocked` or finishes a turn (`working` → `idle`), its key blinks and a system sound plays (Ping for blocked, Glass for done). The first view after a reconnect only primes the baseline. Mute with the **Bell** setting on any Inbox Key.
 
+### Session Key
+
+One Herdr session per key, in the order Ops lists them (by name). Colour is the worst agent state in the session, the subtitle counts its agents (or the blocked ones, or `offline`), the top-left corner names the machine (`LOCAL` on this one). Tap filters the agent keys and the Workspace Keys to that session, with an orange ring on the key; tap it again to show every session. Long press turns the agent wall to its next page on this deck; the top-right corner shows the page (`1/2`) whenever the wall has more agents than keys.
+
+A filter never hides a question: a blocked agent in another session stays on the wall, first, with its session tag. The Plus fleet bar and the Session Dial set the same filter.
+
 ### Workspace Key
 
-One Herdr workspace per key, ordered by host then Herdr's workspace number. Colour is Herdr's roll-up of the agents inside, the subtitle counts agents, a white ring marks the workspace that host's Herdr is showing. Press switches that host's Herdr to the workspace (`workspace.focus` via Ops) and raises iTerm2.
+One Herdr workspace per key, ordered by session then Herdr's workspace number; under a session filter only that session's workspaces show. Colour is Herdr's roll-up of the agents inside, the subtitle counts agents, a white ring marks the workspace that session's Herdr is showing. Press switches Herdr to the workspace (`workspace.focus` via Ops), raises iTerm2 and narrows the agent keys to it (orange ring); press it again to widen them.
 
 ### Global keys
 
 | Key | Press |
 | --- | --- |
-| Attach | opens an iTerm2 window running `herdr` locally, `ssh -t <alias> herdr`, `mosh <alias> -- herdr` or `ssh -t <alias> tmux attach` (host and mode per key) |
+| Attach | opens an iTerm2 window running `herdr` locally, `ssh -t <alias> herdr`, `mosh <alias> -- herdr` or `ssh -t <alias> tmux attach` (machine and mode per key) |
 | Stop All | first press arms (SURE? with the busy count, 4 s); second press sends Escape to every working or blocked agent through Ops |
 | Dictate | raises iTerm2 and clicks Edit › Start Dictation |
 | Mute Bell | toggles the done-ping sound |
@@ -173,19 +181,19 @@ macOS asks once for Automation consent ("Stream Deck wants access to control iTe
 | Dial | Rotate | Press | Strip segment |
 | --- | --- | --- | --- |
 | 1 Scroll | page the Inbox Keys (8 per page) | back to page 1 | fleet bar |
-| 2 Machine | cycle host filter: all → each host | show all hosts | fleet bar |
+| 2 Session | cycle the session filter: all → each session | show all sessions | fleet bar |
 | 3 Effort | pick a Claude Code effort level (low … max) | send `/effort <level>` to the focused Claude pane | fleet bar |
 | 4 Pane | scroll the focused pane's terminal (3 rows per tick); in ticker mode, cycle blocked agents | toggle fleet bar / inbox ticker | fleet bar |
 
-The strip is one 800×100 scene sliced per dial. Fleet bar: one block per host coloured by its worst agent state with counts, tap a block to filter the keys to that host (tap again to clear); spare blocks show page and effort. Inbox ticker: the oldest blocked agent with its host and title, tap to focus it. The strip dims when Ops is unreachable.
+The strip is one 800×100 scene sliced per dial. Fleet bar: one block per session coloured by its worst agent state with counts, tap a block to filter the keys to that session (tap again to clear); spare blocks show page, effort and the filter. Inbox ticker: the oldest blocked agent with its session and title, tap to focus it. The strip dims when Ops is unreachable.
 
 ### XL agent wall
 
-The XL page "LCARS": rows 1–2 are 16 Inbox Keys in **wall** layout (slot n is the n-th agent across all hosts in Ops's order, blocked first, then most recent, no paging), row 3 is eight Workspace Keys, row 4 the global keys. New agents appear as soon as Ops sees their first status event; keys beyond the agent count stay black. The last two keys of rows 3 and 4 hold the third-party usage keys: Claude & Codex Usage (`com.singerous.ai-limits`) and AI Usage (`com.len.limits`), one Claude and one Codex key each. Those plugins ship encrypted manifests, so their keys are written as raw actions with the ids read from their bundled code.
+The XL page "LCARS" reads top-down, session → workspace → agent: row 1 is four Session Keys and four Workspace Keys, rows 2–3 are 14 Inbox Keys in **wall** layout (slot n is the n-th agent under the filter in Ops's order, blocked first, then most recent; a long press on a Session Key turns the page), row 4 the global keys. New agents appear as soon as Ops sees their first status event; keys beyond the agent count stay black. The last two keys of rows 3 and 4 hold the third-party usage keys: Claude & Codex Usage (`com.singerous.ai-limits`) and AI Usage (`com.len.limits`), one Claude and one Codex key each. Those plugins ship encrypted manifests, so their keys are written as raw actions with the ids read from their bundled code.
 
 ### Travel deck (15-key MK.2)
 
-Page "LCARS travel": six Inbox Keys in wall layout, Attach keys for the local Herdr and the remote host over mosh and tmux, Dictate, Stop All and Mute Bell. Three keys stay free.
+Page "LCARS travel": six Inbox Keys in wall layout, three Session Keys, Attach keys for the local Herdr and the remote machine over mosh and tmux, Dictate, Stop All and Mute Bell.
 
 ### Deck layout
 

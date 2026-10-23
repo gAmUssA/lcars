@@ -1,6 +1,6 @@
 [package]
 name = "ops"
-description = "LCARS Ops: merges Herdr socket state from every host for the Stream Deck plugin"
+description = "LCARS Ops: merges Herdr sessions from every machine for the Stream Deck plugin"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

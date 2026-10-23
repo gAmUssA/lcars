@@ -18,7 +18,7 @@ use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 const USAGE: &str = "\
-ops — LCARS daemon: merges Herdr state from every session for the Stream Deck plugin
+ops — LCARS daemon: merges every configured Herdr session for the Stream Deck plugin
 
 Usage:
   ops [--config PATH]        Run (default config: ~/.config/ops/ops.toml)
