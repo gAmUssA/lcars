@@ -1,4 +1,4 @@
-//! How Ops reaches a host's Herdr socket: directly, or through a Unix
+//! How Ops reaches a Herdr session's socket: directly, or through a Unix
 //! socket forwarded over an existing SSH ControlMaster.
 
 use std::path::PathBuf;
@@ -59,7 +59,7 @@ impl Transport {
         }
     }
 
-    /// Open one fresh connection to the host's Herdr socket. For SSH
+    /// Open one fresh connection to the session's Herdr socket. For SSH
     /// transports this establishes the forward on first use and after the
     /// forwarded socket goes stale.
     pub async fn connect(&self) -> Result<UnixStream> {

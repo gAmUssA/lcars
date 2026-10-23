@@ -2,7 +2,7 @@
 // strip segment above it; all four render slices of one shared scene.
 //
 //   dial 1  scroll   rotate pages the key list, press returns to page 1
-//   dial 2  machine  rotate cycles the host filter, press clears it
+//   dial 2  machine  rotate cycles the session filter, press clears it
 //   dial 3  effort   rotate picks a Claude Code effort level, press sends /effort <level>
 //   dial 4  pane     rotate scrolls the focused pane (or the ticker, in ticker mode),
 //                    press toggles the strip between fleet bar and inbox ticker
@@ -15,7 +15,7 @@ import streamDeck, {
 } from "@elgato/streamdeck";
 import type { FleetStore } from "../core/store";
 import { renderStripSegment, stripTap, totalsOf, type StripScene } from "../core/strip";
-import { blockedSessions, pageCount, summariseHosts } from "../core/view-state";
+import { blockedPanes, pageCount, summariseSessions } from "../core/view-state";
 import type { OpsActions } from "../ops/actions";
 import type { TerminalActivator } from "../os/terminal";
 
@@ -36,12 +36,12 @@ export function sceneFrom(store: FleetStore): StripScene {
   const s = store.getState();
   return {
     mode: s.ui.stripMode,
-    hosts: summariseHosts(s.view, store.allKeys()),
-    hostFilter: s.ui.hostFilter,
+    sessions: summariseSessions(s.view, store.allKeys()),
+    sessionFilter: s.ui.sessionFilter,
     page: s.ui.page,
     pages: pageCount(s.keys.length),
     effort: s.ui.effort,
-    blocked: blockedSessions(s.keys),
+    blocked: blockedPanes(s.keys),
     tickerIndex: s.ui.tickerIndex,
     totals: totalsOf(s.keys),
     live: s.healthy,
@@ -66,25 +66,25 @@ abstract class StripDial extends SingletonAction {
     const segment = ev.action.coordinates?.column ?? 0;
     const tap = stripTap(sceneFrom(this.deps.store), segment, ev.payload.tapPos[0]);
     switch (tap.kind) {
-      case "host":
-        this.deps.store.setHostFilter(tap.host);
+      case "session":
+        this.deps.store.setSessionFilter(tap.session);
         break;
       case "clear-filter":
-        this.deps.store.setHostFilter(null);
+        this.deps.store.setSessionFilter(null);
         break;
       case "focus":
-        await this.focus(tap.sessionId);
+        await this.focus(tap.paneId);
         break;
       case "none":
         break;
     }
   }
 
-  protected async focus(sessionId: string): Promise<void> {
+  protected async focus(paneId: string): Promise<void> {
     try {
-      if (!(await this.deps.ops.focus(sessionId))) await this.deps.terminal.activate();
+      if (!(await this.deps.ops.focus(paneId))) await this.deps.terminal.activate();
     } catch (e) {
-      streamDeck.logger.error(`focus ${sessionId} failed: ${String(e)}`);
+      streamDeck.logger.error(`focus ${paneId} failed: ${String(e)}`);
     }
   }
 
@@ -111,10 +111,10 @@ export class ScrollDial extends StripDial {
 export class MachineDial extends StripDial {
   override readonly manifestId = DIAL_UUIDS.machine;
   override onDialRotate(ev: DialRotateEvent): void {
-    this.deps.store.cycleHostFilter(ev.payload.ticks);
+    this.deps.store.cycleSessionFilter(ev.payload.ticks);
   }
   override onDialDown(_ev: DialDownEvent): void {
-    this.deps.store.setHostFilter(null);
+    this.deps.store.setSessionFilter(null);
   }
 }
 
@@ -124,7 +124,7 @@ export class EffortDial extends StripDial {
     this.deps.store.cycleEffortLevel(ev.payload.ticks);
   }
   override async onDialDown(ev: DialDownEvent): Promise<void> {
-    const target = this.deps.store.focusedSession();
+    const target = this.deps.store.focusedPane();
     const effort = this.deps.store.getState().ui.effort;
     if (!target || target.agent !== "claude") {
       streamDeck.logger.info(`effort: focused pane is ${target ? target.agent : "none"}, /effort only applies to Claude Code`);
@@ -149,7 +149,7 @@ export class PaneDial extends StripDial {
       store.moveTicker(ev.payload.ticks);
       return;
     }
-    const target = store.focusedSession();
+    const target = store.focusedPane();
     if (!target) return;
     try {
       await this.deps.ops.scroll(target.id, scrollDelta(ev.payload.ticks));

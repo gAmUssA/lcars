@@ -1,5 +1,5 @@
 //! Put a focused pane on screen: find the local Herdr TUI client attached to a
-//! host's socket and reveal the iTerm2 session it runs in.
+//! session's socket and reveal the iTerm2 session it runs in.
 //!
 //! Focusing a pane over the socket only moves Herdr's attached clients; the
 //! window hosting them may sit behind others or on another Space. Ported from
@@ -9,7 +9,7 @@
 //! does, and open `iterm2:reveal?sessionid=…`. That URL needs no Automation
 //! consent and takes ~20 ms, against an osascript round-trip.
 //!
-//! Local hosts only: a client of a remote Herdr runs `ssh`/`mosh` here and has
+//! Local sessions only: a client of a remote Herdr runs `ssh`/`mosh` here and has
 //! no socket to match, so callers fall back to raising the terminal app.
 
 use std::collections::HashMap;
@@ -29,7 +29,7 @@ const ENV_ALLOWLIST: &[&str] = &[
     "TERM_PROGRAM",
 ];
 
-/// Local hosts' Herdr sockets, by host name.
+/// Local sessions' Herdr sockets, by session name.
 #[derive(Debug, Clone, Default)]
 pub struct Revealer {
     sockets: HashMap<String, PathBuf>,
@@ -40,11 +40,11 @@ impl Revealer {
         Revealer { sockets }
     }
 
-    /// Reveal the iTerm session showing `host`'s Herdr. `Ok(false)` when there
-    /// is nothing to reveal (remote host, no attached iTerm client); the
+    /// Reveal the iTerm session showing `session`'s Herdr. `Ok(false)` when there
+    /// is nothing to reveal (remote session, no attached iTerm client); the
     /// caller then raises the terminal app instead.
-    pub async fn reveal(&self, host: &str) -> Result<bool> {
-        let Some(socket) = self.sockets.get(host).cloned() else {
+    pub async fn reveal(&self, session: &str) -> Result<bool> {
+        let Some(socket) = self.sockets.get(session).cloned() else {
             return Ok(false);
         };
         let sessions = tokio::task::spawn_blocking(move || iterm_sessions_for(&socket))

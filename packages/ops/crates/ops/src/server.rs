@@ -1,5 +1,5 @@
-//! Plugin-facing server on loopback: `GET /sessions` for a snapshot,
-//! `GET /ws` for a push stream, `POST /actions` to relay key presses,
+//! Plugin-facing server on loopback: `GET /fleet` for a snapshot,
+//! `GET /fleet/ws` for a push stream, `POST /actions` to relay key presses,
 //! `GET /healthz` unauthenticated. When Ops owns desktop banners, `/healthz`
 //! carries `X-Ops-Banners: on` so herdr-notify knows to stay silent.
 //!
@@ -29,14 +29,21 @@ use tokio::sync::{broadcast, watch};
 use tracing::{debug, info, warn};
 
 use crate::actions::ActionRelay;
-use crate::model::{AgentState, Fleet, HostStatus, Session, Workspace};
+use crate::model::{AgentState, Fleet, Pane, SessionStatus, Workspace};
 use crate::reveal::Revealer;
 
-/// What the plugin receives: hosts plus sessions in display order.
+/// Version of the `FleetView` shape. 2: Herdr naming (`sessions` are Herdr
+/// sessions, `panes` their panes), served on `/fleet`; version 1 was
+/// `hosts` + `sessions` on `/sessions`.
+pub const API_VERSION: u32 = 2;
+
+/// What the plugin receives: Herdr sessions, their panes in display order
+/// (blocked first, then most recently changed) and their workspaces.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FleetView {
-    pub hosts: Vec<HostStatus>,
-    pub sessions: Vec<Session>,
+    pub api: u32,
+    pub sessions: Vec<SessionStatus>,
+    pub panes: Vec<Pane>,
     #[serde(default)]
     pub workspaces: Vec<Workspace>,
 }
@@ -44,8 +51,9 @@ pub struct FleetView {
 impl FleetView {
     pub fn from_fleet(fleet: &Fleet) -> Self {
         FleetView {
-            hosts: fleet.hosts.values().cloned().collect(),
-            sessions: fleet.sessions_sorted().into_iter().cloned().collect(),
+            api: API_VERSION,
+            sessions: fleet.sessions.values().cloned().collect(),
+            panes: fleet.panes_sorted().into_iter().cloned().collect(),
             workspaces: fleet.workspaces_sorted().into_iter().cloned().collect(),
         }
     }
@@ -97,9 +105,9 @@ pub fn router(
     };
     let banners = options.banners;
     let protected = Router::new()
-        .route("/sessions", get(sessions))
+        .route("/fleet", get(fleet_view))
         .route("/actions", post(actions))
-        .route("/ws", get(ws_upgrade))
+        .route("/fleet/ws", get(ws_upgrade))
         .layer(middleware::from_fn_with_state(state.clone(), require_token));
     Router::new()
         .route(
@@ -183,18 +191,18 @@ async fn require_token(State(state): State<AppState>, request: Request, next: Ne
         .into_response()
 }
 
-/// `POST /actions` body. `session` is a `FleetView` session id (`host/pane`).
+/// `POST /actions` body. `pane` is a `FleetView` pane id (`session/pane`).
 ///
 /// Actions: `focus`; `scroll` with `delta` rows (positive scrolls up into
 /// scrollback); `prompt` with `text` submitted to the agent plus Enter;
 /// `send_keys` with `keys` (Herdr logical key names such as `enter`, `esc`);
-/// `focus_workspace` with `workspace` (`host/w1`) instead of `session`.
-/// Keys outside `SAFE_KEYS` are relayed only to a `blocked` session.
+/// `focus_workspace` with `workspace` (`session/w1`) instead of `pane`.
+/// Keys outside `SAFE_KEYS` are relayed only to a `blocked` pane.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ActionRequest {
     pub action: String,
     #[serde(default)]
-    pub session: String,
+    pub pane: String,
     #[serde(default)]
     pub workspace: Option<String>,
     #[serde(default)]
@@ -231,7 +239,7 @@ fn action_error(status: StatusCode, error: String) -> (StatusCode, Json<ActionRe
     )
 }
 
-async fn sessions(State(state): State<AppState>) -> Json<FleetView> {
+async fn fleet_view(State(state): State<AppState>) -> Json<FleetView> {
     let view: FleetView = (**state.fleet.borrow()).clone();
     Json(view)
 }
@@ -243,47 +251,43 @@ async fn actions(
     if request.action == "focus_workspace" {
         return focus_workspace(&state, request.workspace.as_deref().unwrap_or("")).await;
     }
-    let (session, host) = {
+    let (pane, session) = {
         let view = state.fleet.borrow();
-        let session = view
-            .sessions
-            .iter()
-            .find(|s| s.id == request.session)
-            .cloned();
-        let host = session
+        let pane = view.panes.iter().find(|s| s.id == request.pane).cloned();
+        let session = pane
             .as_ref()
-            .and_then(|s| view.hosts.iter().find(|h| h.name == s.host).cloned());
-        (session, host)
+            .and_then(|s| view.sessions.iter().find(|h| h.name == s.session).cloned());
+        (pane, session)
     };
-    let Some(session) = session else {
+    let Some(pane) = pane else {
         return action_error(
             StatusCode::NOT_FOUND,
             format!(
-                "no session `{}` — the key may be stale, wait for the next update",
-                request.session
+                "no pane `{}` — the key may be stale, wait for the next update",
+                request.pane
             ),
         );
     };
-    if let Some(host) = host {
-        if !host.connected {
+    if let Some(session) = session {
+        if !session.connected {
             return action_error(
                 StatusCode::SERVICE_UNAVAILABLE,
                 format!(
-                    "host `{}` is disconnected ({}); the key shows its last known state",
-                    host.name,
-                    host.error.as_deref().unwrap_or("no detail")
+                    "session `{}` is disconnected ({}); the key shows its last known state",
+                    session.name,
+                    session.error.as_deref().unwrap_or("no detail")
                 ),
             );
         }
     }
     let mut revealed = None;
     let result: anyhow::Result<Option<u64>> = match request.action.as_str() {
-        "focus" => match state.relay.focus(&session).await {
+        "focus" => match state.relay.focus(&pane).await {
             Ok(()) => {
-                revealed = Some(match state.revealer.reveal(&session.host).await {
+                revealed = Some(match state.revealer.reveal(&pane.session).await {
                     Ok(done) => done,
                     Err(err) => {
-                        warn!(session = %session.id, error = %format!("{err:#}"), "reveal failed");
+                        warn!(pane = %pane.id, error = %format!("{err:#}"), "reveal failed");
                         false
                     }
                 });
@@ -292,7 +296,7 @@ async fn actions(
             Err(err) => Err(err),
         },
         "scroll" => match request.delta {
-            Some(delta) => state.relay.scroll(&session, delta).await.map(Some),
+            Some(delta) => state.relay.scroll(&pane, delta).await.map(Some),
             None => {
                 return action_error(
                     StatusCode::BAD_REQUEST,
@@ -301,7 +305,7 @@ async fn actions(
             }
         },
         "prompt" => match request.text.as_deref() {
-            Some(text) => state.relay.prompt(&session, text).await.map(|()| None),
+            Some(text) => state.relay.prompt(&pane, text).await.map(|()| None),
             None => {
                 return action_error(StatusCode::BAD_REQUEST, "prompt needs `text`".to_string())
             }
@@ -309,16 +313,16 @@ async fn actions(
         "send_keys" => match request.keys.as_deref() {
             Some(keys) => {
                 let confirming = keys.iter().any(|k| !SAFE_KEYS.contains(&k.as_str()));
-                if confirming && session.state != AgentState::Blocked {
+                if confirming && pane.state != AgentState::Blocked {
                     return action_error(
                         StatusCode::CONFLICT,
                         format!(
                             "refusing {:?} on {}: it is {:?}, not blocked; only {:?} may be sent to a non-blocked pane",
-                            keys, session.id, session.state, SAFE_KEYS
+                            keys, pane.id, pane.state, SAFE_KEYS
                         ),
                     );
                 }
-                state.relay.send_keys(&session, keys).await.map(|()| None)
+                state.relay.send_keys(&pane, keys).await.map(|()| None)
             }
             None => {
                 return action_error(
@@ -336,7 +340,7 @@ async fn actions(
     };
     match result {
         Ok(offset_from_bottom) => {
-            info!(action = %request.action, session = %session.id, "action relayed");
+            info!(action = %request.action, pane = %pane.id, "action relayed");
             (
                 StatusCode::OK,
                 Json(ActionResponse {
@@ -348,20 +352,20 @@ async fn actions(
             )
         }
         Err(err) => {
-            warn!(action = %request.action, session = %session.id, error = %format!("{err:#}"), "action failed");
+            warn!(action = %request.action, pane = %pane.id, error = %format!("{err:#}"), "action failed");
             action_error(StatusCode::BAD_GATEWAY, format!("{err:#}"))
         }
     }
 }
 
 async fn focus_workspace(state: &AppState, id: &str) -> (StatusCode, Json<ActionResponse>) {
-    let (workspace, host) = {
+    let (workspace, session) = {
         let view = state.fleet.borrow();
         let workspace = view.workspaces.iter().find(|w| w.id == id).cloned();
-        let host = workspace
+        let session = workspace
             .as_ref()
-            .and_then(|w| view.hosts.iter().find(|h| h.name == w.host).cloned());
-        (workspace, host)
+            .and_then(|w| view.sessions.iter().find(|h| h.name == w.session).cloned());
+        (workspace, session)
     };
     let Some(workspace) = workspace else {
         return action_error(
@@ -369,11 +373,11 @@ async fn focus_workspace(state: &AppState, id: &str) -> (StatusCode, Json<Action
             format!("no workspace `{id}` — the key may be stale, wait for the next update"),
         );
     };
-    if let Some(host) = host {
-        if !host.connected {
+    if let Some(session) = session {
+        if !session.connected {
             return action_error(
                 StatusCode::SERVICE_UNAVAILABLE,
-                format!("host `{}` is disconnected", host.name),
+                format!("session `{}` is disconnected", session.name),
             );
         }
     }
@@ -453,7 +457,7 @@ pub fn publish(view_tx: &watch::Sender<Arc<FleetView>>, updates: &Updates, view:
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::HostEvent;
+    use crate::model::SessionEvent;
     use futures_util::StreamExt;
     use herdr_compat::api::schema::{AgentStatus, PaneAgentStatusChangedEvent};
     use std::collections::HashMap;
@@ -462,8 +466,8 @@ mod tests {
 
     const TOKEN: &str = "test-token-0123456789abcdef0123456789abcdef";
 
-    fn status_event(pane: &str, status: AgentStatus, agent: Option<&str>) -> HostEvent {
-        HostEvent::StatusChanged(PaneAgentStatusChangedEvent {
+    fn status_event(pane: &str, status: AgentStatus, agent: Option<&str>) -> SessionEvent {
+        SessionEvent::StatusChanged(PaneAgentStatusChangedEvent {
             pane_id: pane.into(),
             workspace_id: "w7".into(),
             agent_status: status,
@@ -475,10 +479,10 @@ mod tests {
     }
 
     fn fleet_with_one_blocked_session() -> Fleet {
-        let mut fleet = Fleet::with_hosts([("mini", false)], 1_000);
+        let mut fleet = Fleet::with_sessions([("mini", Some("mini"))], 1_000);
         fleet.apply(
             "mini",
-            HostEvent::Connected {
+            SessionEvent::Connected {
                 version: "0.9.0".into(),
                 protocol: 22,
             },
@@ -495,7 +499,7 @@ mod tests {
                 "pane_count": 2, "tab_count": 1, "active_tab_id": "w7:t1", "agent_status": "blocked"
             }))
             .unwrap();
-        fleet.apply("mini", HostEvent::Workspaces(vec![ws]), 1_003);
+        fleet.apply("mini", SessionEvent::Workspaces(vec![ws]), 1_003);
         fleet
     }
 
@@ -503,7 +507,7 @@ mod tests {
     /// is the focused agent's info, not `ok`.
     const AGENT_FOCUS_REPLY: &str = r#"{"type":"agent_info","agent":{"terminal_id":"term_65e1ea01c6a2915","agent":"claude","terminal_title":"◐ Coding policy plugin from Tessl","terminal_title_stripped":"Coding policy plugin from Tessl","agent_status":"working","tokens":{"model":"fable-5-1"},"agent_session":{"source":"herdr:claude","agent":"claude","kind":"id","value":"4827ac7d-2a1c-40c5-ae52-710fe42318c0"},"workspace_id":"w9","tab_id":"w9:t1","pane_id":"w9:p1","focused":true,"state_change_seq":4696,"cwd":"/Users/me/projects/lcars","foreground_cwd":"/Users/me/projects/lcars","revision":9}}"#;
 
-    /// Fake Herdr for the mini host: answers `agent.focus` with the recorded
+    /// Fake Herdr for the mini session: answers `agent.focus` with the recorded
     /// `agent_info` reply, everything else with a fitting result, and records the request.
     async fn fake_herdr(
         path: std::path::PathBuf,
@@ -576,12 +580,12 @@ mod tests {
         let _ = std::fs::remove_file(&socket);
         let (seen_tx, herdr_requests) = tokio::sync::mpsc::unbounded_channel();
         tokio::spawn(fake_herdr(socket.clone(), seen_tx));
-        let mut hosts = std::collections::HashMap::new();
-        hosts.insert(
+        let mut sessions = std::collections::HashMap::new();
+        sessions.insert(
             "mini".to_string(),
             crate::herdr::transport::Transport::Local { socket },
         );
-        let relay = Arc::new(ActionRelay::new(hosts));
+        let relay = Arc::new(ActionRelay::new(sessions));
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
         let serve_updates = updates.clone();
@@ -634,7 +638,9 @@ mod tests {
     >;
 
     async fn ws_connect(addr: std::net::SocketAddr) -> Ws {
-        let mut request = format!("ws://{addr}/ws").into_client_request().unwrap();
+        let mut request = format!("ws://{addr}/fleet/ws")
+            .into_client_request()
+            .unwrap();
         request
             .headers_mut()
             .insert("Authorization", format!("Bearer {TOKEN}").parse().unwrap());
@@ -642,18 +648,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn get_sessions_returns_hosts_and_sorted_sessions_as_json() {
+    async fn get_fleet_returns_sessions_and_sorted_panes_as_json() {
         let h = start().await;
-        let (status, body) = get(h.addr, "/sessions", Some(TOKEN)).await;
+        let (status, body) = get(h.addr, "/fleet", Some(TOKEN)).await;
         assert_eq!(status, 200, "{body}");
         let view: FleetView = serde_json::from_str(&body).unwrap();
-        assert_eq!(view.hosts.len(), 1);
-        assert!(view.hosts[0].connected);
         assert_eq!(view.sessions.len(), 1);
-        assert_eq!(view.sessions[0].id, "mini/w7:p1");
-        assert_eq!(view.sessions[0].state, AgentState::Blocked);
+        assert!(view.sessions[0].connected);
+        assert_eq!(view.panes.len(), 1);
+        assert_eq!(view.panes[0].id, "mini/w7:p1");
+        assert_eq!(view.panes[0].state, AgentState::Blocked);
         let json: serde_json::Value = serde_json::from_str(&body).unwrap();
-        assert_eq!(json["sessions"][0]["state"], "blocked");
+        assert_eq!(json["api"], 2);
+        assert_eq!(json["sessions"][0]["name"], "mini");
+        assert_eq!(json["sessions"][0]["machine"], "mini");
+        assert_eq!(json["panes"][0]["session"], "mini");
+        assert_eq!(json["panes"][0]["state"], "blocked");
+    }
+
+    #[tokio::test]
+    async fn version_one_routes_are_gone() {
+        // A plugin from before the rename must see "no Ops", not a view it
+        // would misread.
+        let h = start().await;
+        let (status, _) = get(h.addr, "/sessions", Some(TOKEN)).await;
+        assert_eq!(status, 404);
+        let (status, _) = get(h.addr, "/ws", Some(TOKEN)).await;
+        assert_eq!(status, 404);
     }
 
     #[tokio::test]
@@ -662,11 +683,11 @@ mod tests {
         let (status, body) = get(h.addr, "/healthz", None).await;
         assert_eq!(status, 200);
         assert_eq!(body, "ok");
-        let (status, _) = get(h.addr, "/sessions", None).await;
+        let (status, _) = get(h.addr, "/fleet", None).await;
         assert_eq!(status, 401);
-        let (status, _) = get(h.addr, "/sessions", Some("wrong")).await;
+        let (status, _) = get(h.addr, "/fleet", Some("wrong")).await;
         assert_eq!(status, 401);
-        let body = r#"{"action":"focus","session":"mini/w7:p1"}"#;
+        let body = r#"{"action":"focus","pane":"mini/w7:p1"}"#;
         let (status, text) = http(
             h.addr,
             &format!(
@@ -678,7 +699,7 @@ mod tests {
         .await;
         assert_eq!(status, 401, "{text}");
         assert!(text.contains("bearer token"));
-        let (status, _) = get(h.addr, "/ws", None).await;
+        let (status, _) = get(h.addr, "/fleet/ws", None).await;
         assert_eq!(status, 401);
     }
 
@@ -713,8 +734,7 @@ mod tests {
     #[tokio::test]
     async fn focus_action_relays_agent_focus_to_the_owning_host() {
         let mut h = start().await;
-        let (status, json) =
-            post_action(h.addr, r#"{"action":"focus","session":"mini/w7:p1"}"#).await;
+        let (status, json) = post_action(h.addr, r#"{"action":"focus","pane":"mini/w7:p1"}"#).await;
         assert_eq!(status, 200, "{json}");
         assert_eq!(json["ok"], true);
         // No local socket configured for the revealer: the plugin raises the app.
@@ -734,7 +754,7 @@ mod tests {
             1_005,
         );
         h.publish(&fleet);
-        let (status, _) = post_action(h.addr, r#"{"action":"focus","session":"mini/w7:p2"}"#).await;
+        let (status, _) = post_action(h.addr, r#"{"action":"focus","pane":"mini/w7:p2"}"#).await;
         assert_eq!(status, 200);
         let req = h.herdr_requests.recv().await.unwrap();
         assert_eq!(req["method"], "pane.focus");
@@ -746,7 +766,7 @@ mod tests {
         let mut h = start().await;
         let (status, json) = post_action(
             h.addr,
-            r#"{"action":"scroll","session":"mini/w7:p1","delta":3}"#,
+            r#"{"action":"scroll","pane":"mini/w7:p1","delta":3}"#,
         )
         .await;
         assert_eq!(status, 200, "{json}");
@@ -761,18 +781,18 @@ mod tests {
         );
         let (_, json) = post_action(
             h.addr,
-            r#"{"action":"scroll","session":"mini/w7:p1","delta":500}"#,
+            r#"{"action":"scroll","pane":"mini/w7:p1","delta":500}"#,
         )
         .await;
         assert_eq!(json["offset_from_bottom"], 40);
         let (_, json) = post_action(
             h.addr,
-            r#"{"action":"scroll","session":"mini/w7:p1","delta":-500}"#,
+            r#"{"action":"scroll","pane":"mini/w7:p1","delta":-500}"#,
         )
         .await;
         assert_eq!(json["offset_from_bottom"], 0);
         let (status, json) =
-            post_action(h.addr, r#"{"action":"scroll","session":"mini/w7:p1"}"#).await;
+            post_action(h.addr, r#"{"action":"scroll","pane":"mini/w7:p1"}"#).await;
         assert_eq!(status, 400);
         assert!(json["error"].as_str().unwrap().contains("delta"));
     }
@@ -782,7 +802,7 @@ mod tests {
         let mut h = start().await;
         let (status, json) = post_action(
             h.addr,
-            r#"{"action":"prompt","session":"mini/w7:p1","text":"/effort high"}"#,
+            r#"{"action":"prompt","pane":"mini/w7:p1","text":"/effort high"}"#,
         )
         .await;
         assert_eq!(status, 200, "{json}");
@@ -792,12 +812,12 @@ mod tests {
         assert_eq!(req["params"]["text"], "/effort high");
         let (status, _) = post_action(
             h.addr,
-            r#"{"action":"prompt","session":"mini/w7:p1","text":"  "}"#,
+            r#"{"action":"prompt","pane":"mini/w7:p1","text":"  "}"#,
         )
         .await;
         assert_eq!(status, 502);
         let (status, json) =
-            post_action(h.addr, r#"{"action":"prompt","session":"mini/w7:p1"}"#).await;
+            post_action(h.addr, r#"{"action":"prompt","pane":"mini/w7:p1"}"#).await;
         assert_eq!(status, 400);
         assert!(json["error"].as_str().unwrap().contains("text"));
     }
@@ -807,7 +827,7 @@ mod tests {
         let mut h = start().await;
         let (status, json) = post_action(
             h.addr,
-            r#"{"action":"send_keys","session":"mini/w7:p1","keys":["enter"]}"#,
+            r#"{"action":"send_keys","pane":"mini/w7:p1","keys":["enter"]}"#,
         )
         .await;
         assert_eq!(status, 200, "{json}");
@@ -827,14 +847,14 @@ mod tests {
         h.publish(&fleet);
         let (status, json) = post_action(
             h.addr,
-            r#"{"action":"send_keys","session":"mini/w7:p3","keys":["enter"]}"#,
+            r#"{"action":"send_keys","pane":"mini/w7:p3","keys":["enter"]}"#,
         )
         .await;
         assert_eq!(status, 409, "{json}");
         assert!(json["error"].as_str().unwrap().contains("not blocked"));
         let (status, _) = post_action(
             h.addr,
-            r#"{"action":"send_keys","session":"mini/w7:p3","keys":["esc"]}"#,
+            r#"{"action":"send_keys","pane":"mini/w7:p3","keys":["esc"]}"#,
         )
         .await;
         assert_eq!(status, 200);
@@ -843,12 +863,12 @@ mod tests {
 
         let (status, json) = post_action(
             h.addr,
-            r#"{"action":"send_keys","session":"mini/w7:p1","keys":[]}"#,
+            r#"{"action":"send_keys","pane":"mini/w7:p1","keys":[]}"#,
         )
         .await;
         assert_eq!(status, 502, "{json}");
         let (status, _) =
-            post_action(h.addr, r#"{"action":"send_keys","session":"mini/w7:p1"}"#).await;
+            post_action(h.addr, r#"{"action":"send_keys","pane":"mini/w7:p1"}"#).await;
         assert_eq!(status, 400);
     }
 
@@ -858,14 +878,13 @@ mod tests {
         let mut fleet = fleet_with_one_blocked_session();
         fleet.apply(
             "mini",
-            HostEvent::Disconnected {
+            SessionEvent::Disconnected {
                 error: "ssh master gone".into(),
             },
             1_007,
         );
         h.publish(&fleet);
-        let (status, json) =
-            post_action(h.addr, r#"{"action":"focus","session":"mini/w7:p1"}"#).await;
+        let (status, json) = post_action(h.addr, r#"{"action":"focus","pane":"mini/w7:p1"}"#).await;
         assert_eq!(status, 503, "{json}");
         assert!(json["error"].as_str().unwrap().contains("ssh master gone"));
     }
@@ -873,7 +892,7 @@ mod tests {
     #[tokio::test]
     async fn focus_workspace_relays_workspace_focus_and_rejects_unknown_ids() {
         let mut h = start().await;
-        let (status, body) = get(h.addr, "/sessions", Some(TOKEN)).await;
+        let (status, body) = get(h.addr, "/fleet", Some(TOKEN)).await;
         assert_eq!(status, 200);
         let view: FleetView = serde_json::from_str(&body).unwrap();
         assert_eq!(view.workspaces.len(), 1);
@@ -899,12 +918,11 @@ mod tests {
     #[tokio::test]
     async fn unknown_session_is_404_and_unknown_action_is_400() {
         let h = start().await;
-        let (status, json) =
-            post_action(h.addr, r#"{"action":"focus","session":"mini/w0:p0"}"#).await;
+        let (status, json) = post_action(h.addr, r#"{"action":"focus","pane":"mini/w0:p0"}"#).await;
         assert_eq!(status, 404);
         assert!(json["error"].as_str().unwrap().contains("mini/w0:p0"));
         let (status, json) =
-            post_action(h.addr, r#"{"action":"teleport","session":"mini/w7:p1"}"#).await;
+            post_action(h.addr, r#"{"action":"teleport","pane":"mini/w7:p1"}"#).await;
         assert_eq!(status, 400);
         assert!(json["error"].as_str().unwrap().contains("teleport"));
     }
@@ -915,7 +933,7 @@ mod tests {
         let mut ws = ws_connect(h.addr).await;
         let first = ws.next().await.unwrap().unwrap().into_text().unwrap();
         let view: FleetView = serde_json::from_str(&first).unwrap();
-        assert_eq!(view.sessions[0].state, AgentState::Blocked);
+        assert_eq!(view.panes[0].state, AgentState::Blocked);
 
         // Three changes published back to back, before the socket task runs:
         // working, blocked, idle must all arrive, in order.
@@ -947,7 +965,7 @@ mod tests {
                 .into_text()
                 .unwrap();
             let view: FleetView = serde_json::from_str(&text).unwrap();
-            seen.push(view.sessions[0].state);
+            seen.push(view.panes[0].state);
         }
         assert_eq!(seen, expected);
     }

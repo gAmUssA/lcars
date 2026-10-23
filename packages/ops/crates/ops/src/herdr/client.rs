@@ -1,5 +1,5 @@
-//! Per-host connection loop: ping, snapshot, subscribe, re-subscribe on
-//! new panes, reconnect with backoff. Emits `HostEvent`s; never touches
+//! Per-session connection loop: ping, snapshot, subscribe, re-subscribe on
+//! new panes, reconnect with backoff. Emits `SessionEvent`s; never touches
 //! the merged model directly.
 
 use std::time::Duration;
@@ -17,13 +17,13 @@ use tracing::{debug, info, warn};
 
 use super::transport::Transport;
 use super::wire::{encode_request, parse_frame, Frame};
-use crate::model::{extract_prompt, HostEvent};
+use crate::model::{extract_prompt, SessionEvent};
 use crate::HERDR_PROTOCOL;
 
 /// Reconnect backoff: first retry after `INITIAL`, doubling to `MAX`.
 pub const BACKOFF_INITIAL: Duration = Duration::from_secs(1);
 pub const BACKOFF_MAX: Duration = Duration::from_secs(30);
-/// How long one request may take before the host counts as down.
+/// How long one request may take before the session counts as down.
 pub const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 /// Interval of the out-of-band ping that catches a wedged forward while the
 /// event stream is legitimately quiet.
@@ -39,18 +39,18 @@ enum Refresh {
 /// Rows of screen read for a blocked pane's question.
 pub const PROMPT_READ_LINES: u32 = 40;
 
-/// Events from one host, tagged with its name.
-pub type HostEventSender = mpsc::Sender<(String, HostEvent)>;
+/// Events from one session, tagged with its name.
+pub type SessionEventSender = mpsc::Sender<(String, SessionEvent)>;
 
-pub struct HostClient {
+pub struct SessionClient {
     pub name: String,
     pub transport: Transport,
     request_seq: u64,
 }
 
-impl HostClient {
+impl SessionClient {
     pub fn new(name: impl Into<String>, transport: Transport) -> Self {
-        HostClient {
+        SessionClient {
             name: name.into(),
             transport,
             request_seq: 0,
@@ -59,18 +59,18 @@ impl HostClient {
 
     /// Run forever: connect, stream events, reconnect with backoff.
     /// Ends only when the receiver is dropped.
-    pub async fn run(mut self, tx: HostEventSender) {
+    pub async fn run(mut self, tx: SessionEventSender) {
         let mut backoff = BACKOFF_INITIAL;
         loop {
-            match self.session(&tx, &mut backoff).await {
+            match self.connection(&tx, &mut backoff).await {
                 Ok(()) => return,
                 Err(err) => {
                     let message = format!("{err:#}");
-                    warn!(host = %self.name, error = %message, "herdr connection lost");
+                    warn!(session = %self.name, error = %message, "herdr connection lost");
                     if tx
                         .send((
                             self.name.clone(),
-                            HostEvent::Disconnected { error: message },
+                            SessionEvent::Disconnected { error: message },
                         ))
                         .await
                         .is_err()
@@ -90,9 +90,9 @@ impl HostClient {
         }
     }
 
-    /// One connected session. Returns `Ok` only if the receiver went away;
+    /// One connection. Returns `Ok` only if the receiver went away;
     /// any loss of the event stream is an `Err` so the caller backs off.
-    async fn session(&mut self, tx: &HostEventSender, backoff: &mut Duration) -> Result<()> {
+    async fn connection(&mut self, tx: &SessionEventSender, backoff: &mut Duration) -> Result<()> {
         let pong = self.request(Method::Ping(PingParams::default())).await?;
         let (version, protocol) = match pong {
             ResponseResult::Pong {
@@ -106,14 +106,14 @@ impl HostClient {
                 self.name
             );
         }
-        info!(host = %self.name, version = %version, protocol, via = %self.transport.describe(), "connected to herdr");
-        // A successful ping is a healthy host: the next outage starts the
+        info!(session = %self.name, version = %version, protocol, via = %self.transport.describe(), "connected to herdr");
+        // A successful ping is a healthy session: the next outage starts the
         // backoff ladder from the bottom again.
         *backoff = BACKOFF_INITIAL;
         if tx
             .send((
                 self.name.clone(),
-                HostEvent::Connected { version, protocol },
+                SessionEvent::Connected { version, protocol },
             ))
             .await
             .is_err()
@@ -143,7 +143,7 @@ impl HostClient {
             let frame = match parse_frame(&line) {
                 Ok(frame) => frame,
                 Err(err) => {
-                    warn!(host = %self.name, %err, line = %line, "unparseable frame, skipping");
+                    warn!(session = %self.name, %err, line = %line, "unparseable frame, skipping");
                     continue;
                 }
             };
@@ -156,7 +156,7 @@ impl HostClient {
                 // "add subscription" call, so open a replacement connection.
                 // Frames buffered on the old connection are gone with it, so a
                 // fresh snapshot follows every swap.
-                HostEvent::PaneCreated(pane) if !pane_ids.contains(&pane.pane_id) => {
+                SessionEvent::PaneCreated(pane) if !pane_ids.contains(&pane.pane_id) => {
                     if tx.send((self.name.clone(), event.clone())).await.is_err() {
                         return Ok(());
                     }
@@ -166,7 +166,7 @@ impl HostClient {
                         Err(err) => {
                             // Usually a pane that closed while we were not
                             // listening: rebuild the set from the server.
-                            warn!(host = %self.name, %err, "re-subscribe failed; rebuilding pane set from a snapshot");
+                            warn!(session = %self.name, %err, "re-subscribe failed; rebuilding pane set from a snapshot");
                             pane_ids = self.snapshot_and_publish(tx).await?;
                             self.subscribe(&pane_ids).await?
                         }
@@ -174,23 +174,23 @@ impl HostClient {
                     pane_ids = self.snapshot_and_publish(tx).await?;
                     continue;
                 }
-                HostEvent::PaneClosed { pane_id } => pane_ids.retain(|id| id != pane_id),
+                SessionEvent::PaneClosed { pane_id } => pane_ids.retain(|id| id != pane_id),
                 // Workspace lists are small; a snapshot is the simplest truth.
-                HostEvent::WorkspacesChanged => {
+                SessionEvent::WorkspacesChanged => {
                     pane_ids = self.snapshot_and_publish(tx).await?;
                     continue;
                 }
                 // Follow-up reads that the event stream cannot carry run on
-                // their own task so a slow host never stalls the stream.
-                HostEvent::AgentDetected {
+                // their own task so a slow session never stalls the stream.
+                SessionEvent::AgentDetected {
                     pane_id,
                     released: false,
                     ..
                 } => self.spawn_refresh(tx, Refresh::Pane(pane_id.clone())),
-                HostEvent::StatusChanged(e) if e.agent_status == AgentStatus::Idle => {
+                SessionEvent::StatusChanged(e) if e.agent_status == AgentStatus::Idle => {
                     self.spawn_refresh(tx, Refresh::Agent(e.pane_id.clone()))
                 }
-                HostEvent::StatusChanged(e) if e.agent_status == AgentStatus::Blocked => {
+                SessionEvent::StatusChanged(e) if e.agent_status == AgentStatus::Blocked => {
                     self.spawn_refresh(tx, Refresh::Prompt(e.pane_id.clone()))
                 }
                 _ => {}
@@ -202,7 +202,7 @@ impl HostClient {
     }
 
     /// `session.snapshot`, published as a full replacement; returns the pane ids.
-    async fn snapshot_and_publish(&mut self, tx: &HostEventSender) -> Result<Vec<String>> {
+    async fn snapshot_and_publish(&mut self, tx: &SessionEventSender) -> Result<Vec<String>> {
         let snapshot = match self
             .request(Method::SessionSnapshot(EmptyParams::default()))
             .await?
@@ -214,7 +214,7 @@ impl HostClient {
         let _ = tx
             .send((
                 self.name.clone(),
-                HostEvent::Snapshot {
+                SessionEvent::Snapshot {
                     panes: snapshot.panes,
                     agents: snapshot.agents,
                 },
@@ -223,16 +223,16 @@ impl HostClient {
         let _ = tx
             .send((
                 self.name.clone(),
-                HostEvent::Workspaces(snapshot.workspaces),
+                SessionEvent::Workspaces(snapshot.workspaces),
             ))
             .await;
         Ok(pane_ids)
     }
 
-    fn spawn_refresh(&mut self, tx: &HostEventSender, what: Refresh) {
+    fn spawn_refresh(&mut self, tx: &SessionEventSender, what: Refresh) {
         let transport = self.transport.clone();
         let tx = tx.clone();
-        let host = self.name.clone();
+        let session = self.name.clone();
         let id = self.next_id();
         tokio::spawn(async move {
             let (method, label) = match &what {
@@ -260,25 +260,27 @@ impl HostClient {
                 ),
             };
             let event = match request_once(&transport, id, method).await {
-                Ok(ResponseResult::PaneInfo { pane }) => HostEvent::PaneRefreshed(Box::new(pane)),
-                Ok(ResponseResult::AgentInfo { agent }) => {
-                    HostEvent::AgentRefreshed(Box::new(agent))
+                Ok(ResponseResult::PaneInfo { pane }) => {
+                    SessionEvent::PaneRefreshed(Box::new(pane))
                 }
-                Ok(ResponseResult::PaneRead { read }) => HostEvent::PromptRead {
+                Ok(ResponseResult::AgentInfo { agent }) => {
+                    SessionEvent::AgentRefreshed(Box::new(agent))
+                }
+                Ok(ResponseResult::PaneRead { read }) => SessionEvent::PromptRead {
                     pane_id: read.pane_id.clone(),
                     prompt: extract_prompt(&read.text),
                 },
                 Ok(other) => {
-                    debug!(host = %host, %label, ?other, "unexpected result, ignoring");
+                    debug!(session = %session, %label, ?other, "unexpected result, ignoring");
                     return;
                 }
                 // The agent may already be gone (released, pane closed): not an error.
                 Err(err) => {
-                    debug!(host = %host, %label, %err, "follow-up read failed, ignoring");
+                    debug!(session = %session, %label, %err, "follow-up read failed, ignoring");
                     return;
                 }
             };
-            let _ = tx.send((host, event)).await;
+            let _ = tx.send((session, event)).await;
         });
     }
 
@@ -333,7 +335,7 @@ impl HostClient {
             .ok_or_else(|| anyhow!("herdr closed the connection before acking the subscription"))?;
         match expect_result(&request.id, &ack)? {
             ResponseResult::SubscriptionStarted {} => {
-                debug!(host = %self.name, panes = pane_ids.len(), "subscribed");
+                debug!(session = %self.name, panes = pane_ids.len(), "subscribed");
                 Ok(lines)
             }
             other => bail!("events.subscribe returned {other:?}"),
@@ -383,40 +385,40 @@ fn expect_result(id: &str, line: &str) -> Result<ResponseResult> {
     }
 }
 
-/// Map a pushed frame to a host event. `None` for frames Ops ignores.
-pub fn dispatch(frame: Frame) -> Option<HostEvent> {
+/// Map a pushed frame to a session event. `None` for frames Ops ignores.
+pub fn dispatch(frame: Frame) -> Option<SessionEvent> {
     match frame {
         Frame::Subscription(envelope) => match envelope.data {
             SubscriptionEventData::PaneAgentStatusChanged(event) => {
-                Some(HostEvent::StatusChanged(event))
+                Some(SessionEvent::StatusChanged(event))
             }
             _ => None,
         },
         Frame::Broadcast(envelope) => match envelope.data {
-            EventData::PaneCreated { pane } => Some(HostEvent::PaneCreated(Box::new(pane))),
-            EventData::PaneClosed { pane_id, .. } => Some(HostEvent::PaneClosed { pane_id }),
+            EventData::PaneCreated { pane } => Some(SessionEvent::PaneCreated(Box::new(pane))),
+            EventData::PaneClosed { pane_id, .. } => Some(SessionEvent::PaneClosed { pane_id }),
             EventData::PaneAgentDetected {
                 pane_id,
                 agent,
                 released,
                 ..
-            } => Some(HostEvent::AgentDetected {
+            } => Some(SessionEvent::AgentDetected {
                 pane_id,
                 agent,
                 released,
             }),
-            EventData::PaneFocused { pane_id, .. } => Some(HostEvent::PaneFocused { pane_id }),
-            EventData::PaneUpdated { pane } => Some(HostEvent::PaneRefreshed(Box::new(pane))),
+            EventData::PaneFocused { pane_id, .. } => Some(SessionEvent::PaneFocused { pane_id }),
+            EventData::PaneUpdated { pane } => Some(SessionEvent::PaneRefreshed(Box::new(pane))),
             EventData::WorkspaceCreated { .. }
             | EventData::WorkspaceClosed { .. }
             | EventData::WorkspaceRenamed { .. }
-            | EventData::WorkspaceFocused { .. } => Some(HostEvent::WorkspacesChanged),
+            | EventData::WorkspaceFocused { .. } => Some(SessionEvent::WorkspacesChanged),
             _ => None,
         },
         Frame::Error(err) => {
             // Herdr closes the connection after an error on the stream
             // (`events_lost` when a subscriber falls behind its 512-event
-            // history); the session loop reconnects and re-snapshots.
+            // history); the connection loop reconnects and re-snapshots.
             warn!(
                 code = %err.error.code,
                 message = %err.error.message,
@@ -529,7 +531,7 @@ mod tests {
                         .await
                         .unwrap();
                 }
-                // Hold the stream open briefly, then close to end the session.
+                // Hold the stream open briefly, then close to end the connection.
                 tokio::time::sleep(Duration::from_millis(200)).await;
             }
             drop(stream);
@@ -547,7 +549,7 @@ mod tests {
             subs_tx,
         ));
         let (tx, mut rx) = mpsc::channel(64);
-        let client = HostClient::new(
+        let client = SessionClient::new(
             "fake",
             Transport::Local {
                 socket: path.clone(),
@@ -557,24 +559,24 @@ mod tests {
 
         let mut events = Vec::new();
         let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
-        while !matches!(events.last(), Some(HostEvent::Disconnected { .. })) {
-            let (host, event) = tokio::time::timeout_at(deadline, rx.recv())
+        while !matches!(events.last(), Some(SessionEvent::Disconnected { .. })) {
+            let (session, event) = tokio::time::timeout_at(deadline, rx.recv())
                 .await
                 .expect("events arrive in time")
                 .expect("sender alive");
-            assert_eq!(host, "fake");
+            assert_eq!(session, "fake");
             events.push(event);
         }
 
         assert_eq!(
             events[0],
-            HostEvent::Connected {
+            SessionEvent::Connected {
                 version: "9.9.9".into(),
                 protocol: HERDR_PROTOCOL
             }
         );
         match &events[1] {
-            HostEvent::Snapshot { panes, agents } => {
+            SessionEvent::Snapshot { panes, agents } => {
                 assert_eq!(panes.len(), 1);
                 assert_eq!(panes[0].pane_id, "w9:p2");
                 assert!(agents.is_empty());
@@ -584,7 +586,7 @@ mod tests {
         let states: Vec<AgentState> = events
             .iter()
             .filter_map(|e| match e {
-                HostEvent::StatusChanged(ev) => Some(ev.agent_status.into()),
+                SessionEvent::StatusChanged(ev) => Some(ev.agent_status.into()),
                 _ => None,
             })
             .collect();
@@ -603,10 +605,10 @@ mod tests {
         // may land just after the stream loss, so give it a moment.
         let mut refreshed = events
             .iter()
-            .any(|e| matches!(e, HostEvent::AgentRefreshed(a) if a.completion_seq == Some(7)));
+            .any(|e| matches!(e, SessionEvent::AgentRefreshed(a) if a.completion_seq == Some(7)));
         while !refreshed {
             match tokio::time::timeout(Duration::from_secs(2), rx.recv()).await {
-                Ok(Some((_, HostEvent::AgentRefreshed(a)))) if a.completion_seq == Some(7) => {
+                Ok(Some((_, SessionEvent::AgentRefreshed(a)))) if a.completion_seq == Some(7) => {
                     refreshed = true
                 }
                 Ok(Some(_)) => continue,
@@ -615,7 +617,7 @@ mod tests {
         }
         assert!(refreshed, "{events:?}");
         // The blocked event triggered an agent.read; its question arrives as PromptRead.
-        let wanted = |e: &HostEvent| matches!(e, HostEvent::PromptRead { prompt: Some(p), .. } if p == "Which colour do you prefer?");
+        let wanted = |e: &SessionEvent| matches!(e, SessionEvent::PromptRead { prompt: Some(p), .. } if p == "Which colour do you prefer?");
         let mut prompted = events.iter().any(wanted);
         while !prompted {
             match tokio::time::timeout(Duration::from_secs(2), rx.recv()).await {
@@ -628,7 +630,7 @@ mod tests {
         server.abort();
         // Server closed the stream: client reports the loss and will retry.
         assert!(
-            matches!(events.last(), Some(HostEvent::Disconnected { error }) if error.contains("closed"))
+            matches!(events.last(), Some(SessionEvent::Disconnected { error }) if error.contains("closed"))
         );
 
         let subscribe = subs_rx.recv().await.unwrap();
@@ -671,7 +673,7 @@ mod tests {
         ));
         let (tx, mut rx) = mpsc::channel(64);
         let runner = tokio::spawn(
-            HostClient::new(
+            SessionClient::new(
                 "fake",
                 Transport::Local {
                     socket: path.clone(),
@@ -687,7 +689,7 @@ mod tests {
                 .await
                 .unwrap()
                 .unwrap();
-            if let HostEvent::PaneCreated(pane) = event {
+            if let SessionEvent::PaneCreated(pane) = event {
                 assert_eq!(pane.pane_id, "w9:p7");
                 saw_created = true;
             }
@@ -705,7 +707,7 @@ mod tests {
         while let Ok(Some((_, event))) =
             tokio::time::timeout(Duration::from_millis(800), rx.recv()).await
         {
-            if matches!(event, HostEvent::Snapshot { .. }) {
+            if matches!(event, SessionEvent::Snapshot { .. }) {
                 snapshots_after_created += 1;
                 break;
             }
@@ -736,7 +738,7 @@ mod tests {
         let server = tokio::spawn(fake_herdr(path.clone(), 21, vec![], subs_tx));
         let (tx, mut rx) = mpsc::channel(8);
         let runner = tokio::spawn(
-            HostClient::new(
+            SessionClient::new(
                 "old",
                 Transport::Local {
                     socket: path.clone(),
@@ -751,7 +753,7 @@ mod tests {
         runner.abort();
         server.abort();
         match event {
-            HostEvent::Disconnected { error } => {
+            SessionEvent::Disconnected { error } => {
                 assert!(error.contains("protocol 21"), "{error}");
                 assert!(error.contains("supports 22"), "{error}");
             }
@@ -764,20 +766,22 @@ mod tests {
     fn dispatch_maps_status_and_pane_lifecycle_and_ignores_the_rest() {
         let status = parse_frame(r#"{"data":{"agent":"x","agent_status":"blocked","pane_id":"w1:p1","workspace_id":"w1"},"event":"pane.agent_status_changed"}"#).unwrap();
         match dispatch(status) {
-            Some(HostEvent::StatusChanged(e)) => assert_eq!(e.agent_status, AgentStatus::Blocked),
+            Some(SessionEvent::StatusChanged(e)) => {
+                assert_eq!(e.agent_status, AgentStatus::Blocked)
+            }
             other => panic!("{other:?}"),
         }
         let closed = parse_frame(r#"{"data":{"pane_id":"w1:p1","type":"pane_closed","workspace_id":"w1"},"event":"pane_closed"}"#).unwrap();
         assert_eq!(
             dispatch(closed),
-            Some(HostEvent::PaneClosed {
+            Some(SessionEvent::PaneClosed {
                 pane_id: "w1:p1".into()
             })
         );
         let detected = parse_frame(r#"{"data":{"agent":"x","pane_id":"w1:p1","type":"pane_agent_detected","workspace_id":"w1"},"event":"pane_agent_detected"}"#).unwrap();
         assert_eq!(
             dispatch(detected),
-            Some(HostEvent::AgentDetected {
+            Some(SessionEvent::AgentDetected {
                 pane_id: "w1:p1".into(),
                 agent: Some("x".into()),
                 released: false
@@ -786,18 +790,18 @@ mod tests {
         let released = parse_frame(r#"{"data":{"agent":"x","final_status":"idle","pane_id":"w1:p1","released":true,"type":"pane_agent_detected","workspace_id":"w1"},"event":"pane_agent_detected"}"#).unwrap();
         assert!(matches!(
             dispatch(released),
-            Some(HostEvent::AgentDetected { released: true, .. })
+            Some(SessionEvent::AgentDetected { released: true, .. })
         ));
         let updated = parse_frame(r#"{"data":{"type":"pane_updated","pane":{"pane_id":"w1:p1","terminal_id":"t","workspace_id":"w1","tab_id":"w1:t1","focused":false,"agent_status":"working","revision":9,"terminal_title_stripped":"New title"}},"event":"pane_updated"}"#).unwrap();
         assert!(
-            matches!(dispatch(updated), Some(HostEvent::PaneRefreshed(p)) if p.terminal_title_stripped.as_deref() == Some("New title"))
+            matches!(dispatch(updated), Some(SessionEvent::PaneRefreshed(p)) if p.terminal_title_stripped.as_deref() == Some("New title"))
         );
         let renamed = parse_frame(r#"{"data":{"type":"workspace_renamed","workspace_id":"w1","label":"new"},"event":"workspace_renamed"}"#).unwrap();
-        assert_eq!(dispatch(renamed), Some(HostEvent::WorkspacesChanged));
+        assert_eq!(dispatch(renamed), Some(SessionEvent::WorkspacesChanged));
         let focused = parse_frame(r#"{"data":{"pane_id":"w1:p2","type":"pane_focused","workspace_id":"w1"},"event":"pane_focused"}"#).unwrap();
         assert_eq!(
             dispatch(focused),
-            Some(HostEvent::PaneFocused {
+            Some(SessionEvent::PaneFocused {
                 pane_id: "w1:p2".into()
             })
         );

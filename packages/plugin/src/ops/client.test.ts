@@ -5,8 +5,8 @@ import type { FleetView } from "./types";
 
 const view = (n: number): FleetView => ({
   workspaces: [],
-  hosts: [{ name: "h", local: false, connected: true, version: "0.9.4", protocol: 22, error: null, updated_at_ms: n }],
-  sessions: [],
+  sessions: [{ name: "h", machine: "h", local: false, connected: true, version: "0.9.4", protocol: 22, error: null, updated_at_ms: n }],
+  panes: [],
 });
 
 let server: WebSocketServer | null = null;
@@ -25,7 +25,7 @@ afterEach(async () => {
 function listen(): Promise<{ url: string; sockets: WebSocket[] }> {
   return new Promise((resolve) => {
     const sockets: WebSocket[] = [];
-    server = new WebSocketServer({ host: "127.0.0.1", port: 0, path: "/ws" });
+    server = new WebSocketServer({ host: "127.0.0.1", port: 0, path: "/fleet/ws" });
     server.on("connection", (ws) => sockets.push(ws));
     server.on("listening", () => {
       const { port } = server!.address() as { port: number };
@@ -47,10 +47,10 @@ function waitFor<T>(poll: () => T | undefined, ms = 3000): Promise<T> {
   });
 }
 
-test("wsUrl maps the http base to the /ws endpoint", () => {
-  expect(wsUrl("http://127.0.0.1:7677")).toBe("ws://127.0.0.1:7677/ws");
-  expect(wsUrl("http://127.0.0.1:7677/")).toBe("ws://127.0.0.1:7677/ws");
-  expect(wsUrl("https://ops.example:8443/base")).toBe("wss://ops.example:8443/base/ws");
+test("wsUrl maps the http base to the /fleet/ws endpoint", () => {
+  expect(wsUrl("http://127.0.0.1:7677")).toBe("ws://127.0.0.1:7677/fleet/ws");
+  expect(wsUrl("http://127.0.0.1:7677/")).toBe("ws://127.0.0.1:7677/fleet/ws");
+  expect(wsUrl("https://ops.example:8443/base")).toBe("wss://ops.example:8443/base/fleet/ws");
 });
 
 test("delivers parsed views and ignores malformed messages", async () => {
@@ -60,11 +60,11 @@ test("delivers parsed views and ignores malformed messages", async () => {
   client = createOpsClient({ url, onView: (v) => views.push(v), onDown: () => {}, onLog: (m) => logs.push(m) });
   client.start();
   const ws = await waitFor(() => sockets[0]);
-  ws.send(JSON.stringify(view(1)));
+  ws.send(JSON.stringify({ api: 2, ...view(1) }));
   ws.send("{not json");
-  ws.send(JSON.stringify(view(2)));
+  ws.send(JSON.stringify({ api: 2, ...view(2) }));
   await waitFor(() => (views.length === 2 ? true : undefined));
-  expect(views.map((v) => v.hosts[0].updated_at_ms)).toEqual([1, 2]);
+  expect(views.map((v) => v.sessions[0].updated_at_ms)).toEqual([1, 2]);
   expect(logs.some((l) => l.includes("malformed"))).toBe(true);
 });
 
@@ -80,9 +80,9 @@ test("reports the loss once and reconnects", async () => {
   expect(downs[0]).toMatch(/closed \(1001\)/);
   // Reconnect fires after the 1 s minimum backoff.
   const second = await waitFor(() => sockets[1], 4000);
-  second.send(JSON.stringify(view(9)));
+  second.send(JSON.stringify({ api: 2, ...view(9) }));
   await waitFor(() => (views.length === 1 ? true : undefined));
-  expect(views[0].hosts[0].updated_at_ms).toBe(9);
+  expect(views[0].sessions[0].updated_at_ms).toBe(9);
 }, 10000);
 
 test("stop closes the socket and suppresses further callbacks", async () => {
