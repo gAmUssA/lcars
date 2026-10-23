@@ -21,4 +21,4 @@ Ops called a Herdr server a "host" and an agent pane a "session"; Herdr calls th
 - [x] Blocked agents from outside the filter stay pinned first
 - [x] Wall paging on the XL and MK.2
 - [x] Manifest, property inspectors, README, AGENTS.md, skill, ops.toml.example, CHANGELOG, ADR 0003
-- [ ] Migrate the operator's ops.toml, install, verify on the deck
+- [x] Migrate the operator's ops.toml, install, verify on the deck

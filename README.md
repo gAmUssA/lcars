@@ -13,7 +13,7 @@ Names follow Herdr. A **machine** is a computer Ops reaches directly or over SSH
 
 ## Screenshots
 
-Stream Deck XL, agent wall page: one key per agent across every session (session tag top-right, agent logo, state colour, pane title), workspace keys, the global keys and the third-party usage keys.
+Stream Deck XL, agent wall page, top-down: Session Keys and Workspace Keys on row 1 (machine tag, page counter, agent count), a 14-key agent wall on rows 2–3 (session tag top-right, agent logo, state colour, pane title), the global keys and the third-party usage keys on row 4.
 
 ![Stream Deck app showing the XL LCARS page](docs/images/stream-deck-xl-wall.png)
 
