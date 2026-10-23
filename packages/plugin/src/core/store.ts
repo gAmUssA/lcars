@@ -1,27 +1,33 @@
 // Holds the latest FleetView from Ops plus the plugin-side view state the
-// dials change (session filter, page, strip mode, ticker cursor, effort).
-// Ops already sorts panes (blocked first, then most recent); the store
-// decides which panes get a key and which slice is on screen.
+// keys and dials change (session and workspace filter, pages, strip mode,
+// ticker cursor, effort). Ops already sorts panes (blocked first, then most
+// recent); the store decides which panes get a key and which slice is on
+// screen. One filter serves every deck: a Session Key on the XL and the
+// fleet bar on the Plus set the same thing.
 import type { FleetView, Pane, Workspace } from "../ops/types";
 import {
   blockedPanes,
   clampPage,
   cycleEffort,
   cycleSession,
-  filterBySession,
+  filterKeys,
+  pageCount,
   focusedPane,
   sessionNames,
   INITIAL_VIEW,
   pageSlice,
   type Effort,
   type ViewState,
+  wallSlot,
+  wallPageFor,
+  workspacesFor,
 } from "./view-state";
 
 export type StoreState = {
   view: FleetView | null;
   /** False until the first view arrives and after Ops goes away. */
   healthy: boolean;
-  /** Panes that get a key, after the session filter, in Ops's order. */
+  /** Panes that get a key, after the filters (blocked panes always stay), in Ops's order. */
   keys: Pane[];
   ui: ViewState;
 };
@@ -33,9 +39,12 @@ export type FleetStore = {
   setDown(): void;
   /** Pane shown in a slot of the current page, or null when the slot is empty. */
   paneAt(slot: number): Pane | null;
-  /** Pane at an absolute slot over the whole filtered list (wall layout), ignoring paging. */
-  paneAtAbsolute(slot: number): Pane | null;
-  /** Workspace at a slot in Ops's order (session, then Herdr number); unfiltered. */
+  /** Pane at a wall slot on a deck with `wallSize` wall keys, on the current wall page. */
+  paneOnWall(slot: number, wallSize: number): Pane | null;
+  /** The wall page a deck with `wallSize` wall keys shows (0-based) and how many it has. */
+  wallPage(wallSize: number): { page: number; pages: number };
+  nextWallPage(): void;
+  /** Workspace at a slot in Ops's order (session, then Herdr number), within the session filter. */
   workspaceAt(slot: number): Workspace | null;
   /** All keyed panes regardless of the session filter. */
   allKeys(): Pane[];
@@ -43,6 +52,10 @@ export type FleetStore = {
   resetPage(): void;
   cycleSessionFilter(step: number): void;
   setSessionFilter(session: string | null): void;
+  /** Filter to `session`, or clear the filter when it is already the one set. */
+  toggleSessionFilter(session: string): void;
+  /** Narrow to one workspace (`<session>/<workspace_id>`), or clear it when already set. */
+  toggleWorkspaceFilter(workspaceId: string): void;
   toggleStripMode(): void;
   moveTicker(step: number): void;
   tickerPane(): Pane | null;
@@ -66,7 +79,7 @@ export function createFleetStore(opts: { localSession?: string | null } = {}): F
 
   const recompute = (patch: Partial<StoreState> = {}, ui: Partial<ViewState> = {}): void => {
     const nextUi = { ...state.ui, ...ui };
-    const keys = filterBySession(all, nextUi.sessionFilter);
+    const keys = filterKeys(all, nextUi);
     nextUi.page = clampPage(nextUi.page, keys.length);
     const blocked = blockedPanes(keys);
     nextUi.tickerIndex = blocked.length === 0 ? 0 : ((nextUi.tickerIndex % blocked.length) + blocked.length) % blocked.length;
@@ -85,9 +98,11 @@ export function createFleetStore(opts: { localSession?: string | null } = {}): F
     },
     setView(view) {
       all = keyedPanes(view);
-      // A filter for a session that vanished falls back to all sessions.
+      // A filter for a session or workspace that vanished falls back to all.
       const sessionFilter = state.ui.sessionFilter !== null && !sessionNames(view).includes(state.ui.sessionFilter) ? null : state.ui.sessionFilter;
-      recompute({ view, healthy: true }, { sessionFilter });
+      const workspaceFilter =
+        state.ui.workspaceFilter !== null && !view.workspaces.some((w) => w.id === state.ui.workspaceFilter) ? null : state.ui.workspaceFilter;
+      recompute({ view, healthy: true }, { sessionFilter, workspaceFilter });
     },
     setDown() {
       if (!state.healthy && state.view === null) return;
@@ -99,13 +114,19 @@ export function createFleetStore(opts: { localSession?: string | null } = {}): F
     paneAt(slot) {
       return pageSlice(state.keys, state.ui.page)[slot] ?? null;
     },
-    // The wall is "the n-th agent across the fleet": the Plus session filter
-    // must not rewrite it.
-    paneAtAbsolute(slot) {
-      return all[slot] ?? null;
+    // The wall is "the n-th agent under the filter", paged by the deck's own
+    // wall size so the XL and the MK.2 each show whole pages.
+    paneOnWall(slot, wallSize) {
+      return wallSlot(state.keys, state.ui.wallPage, wallSize, slot);
+    },
+    wallPage(wallSize) {
+      return { page: wallPageFor(state.ui.wallPage, state.keys.length, wallSize), pages: pageCount(state.keys.length, Math.max(wallSize, 1)) };
+    },
+    nextWallPage() {
+      recompute({}, { wallPage: state.ui.wallPage + 1 });
     },
     workspaceAt(slot) {
-      return state.view?.workspaces[slot] ?? null;
+      return workspacesFor(state.view, state.ui.sessionFilter)[slot] ?? null;
     },
     allKeys: () => all,
     movePage(step) {
@@ -115,10 +136,19 @@ export function createFleetStore(opts: { localSession?: string | null } = {}): F
       recompute({}, { page: 0 });
     },
     cycleSessionFilter(step) {
-      recompute({}, { sessionFilter: cycleSession(sessionNames(state.view), state.ui.sessionFilter, step), page: 0 });
+      store.setSessionFilter(cycleSession(sessionNames(state.view), state.ui.sessionFilter, step));
     },
     setSessionFilter(session) {
-      recompute({}, { sessionFilter: session, page: 0 });
+      // A workspace filter belongs to one session; another session drops it.
+      const workspaceFilter = session !== null && state.ui.workspaceFilter?.startsWith(`${session}/`) ? state.ui.workspaceFilter : null;
+      recompute({}, { sessionFilter: session, workspaceFilter, page: 0, wallPage: 0 });
+    },
+    toggleSessionFilter(session) {
+      store.setSessionFilter(state.ui.sessionFilter === session ? null : session);
+    },
+    toggleWorkspaceFilter(workspaceId) {
+      const workspaceFilter = state.ui.workspaceFilter === workspaceId ? null : workspaceId;
+      recompute({}, { workspaceFilter, page: 0, wallPage: 0 });
     },
     toggleStripMode() {
       recompute({}, { stripMode: state.ui.stripMode === "fleet" ? "ticker" : "fleet" });

@@ -1,0 +1,19 @@
+<!doctype html>
+<html>
+  <head lang="en">
+    <title>Session Key</title>
+    <meta charset="utf-8" />
+    <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
+  </head>
+  <body>
+    <sdpi-item label="Slot">
+      <sdpi-select setting="slotIndex" default="0">
+        <option value="0">Session 1</option><option value="1">Session 2</option><option value="2">Session 3</option><option value="3">Session 4</option>
+        <option value="4">Session 5</option><option value="5">Session 6</option><option value="6">Session 7</option><option value="7">Session 8</option>
+      </sdpi-select>
+    </sdpi-item>
+    <sdpi-item label="">
+      <p style="margin: 0; font-size: 8pt; color: #969696">One Herdr session per key, in the order Ops lists them (the [[sessions]] names in ops.toml, sorted). Tap filters the agent keys and Workspace Keys to the session; tap again for all. Blocked agents in other sessions stay on the wall. Long press turns the wall page on this deck.</p>
+    </sdpi-item>
+  </body>
+</html>

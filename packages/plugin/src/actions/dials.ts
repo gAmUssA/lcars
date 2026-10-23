@@ -2,7 +2,7 @@
 // strip segment above it; all four render slices of one shared scene.
 //
 //   dial 1  scroll   rotate pages the key list, press returns to page 1
-//   dial 2  machine  rotate cycles the session filter, press clears it
+//   dial 2  session  rotate cycles the session filter, press clears it (uuid dial.machine, kept for placed dials)
 //   dial 3  effort   rotate picks a Claude Code effort level, press sends /effort <level>
 //   dial 4  pane     rotate scrolls the focused pane (or the ticker, in ticker mode),
 //                    press toggles the strip between fleet bar and inbox ticker
@@ -38,6 +38,7 @@ export function sceneFrom(store: FleetStore): StripScene {
     mode: s.ui.stripMode,
     sessions: summariseSessions(s.view, store.allKeys()),
     sessionFilter: s.ui.sessionFilter,
+    workspaceLabel: s.view?.workspaces.find((w) => w.id === s.ui.workspaceFilter)?.label ?? null,
     page: s.ui.page,
     pages: pageCount(s.keys.length),
     effort: s.ui.effort,
