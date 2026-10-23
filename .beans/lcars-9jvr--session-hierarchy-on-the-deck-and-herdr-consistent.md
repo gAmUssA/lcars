@@ -20,5 +20,5 @@ Ops called a Herdr server a "host" and an agent pane a "session"; Herdr calls th
 - [x] Workspace filter: under a session filter the Workspace Keys show that session's workspaces; tap narrows the agents to it
 - [x] Blocked agents from outside the filter stay pinned first
 - [x] Wall paging on the XL and MK.2
-- [ ] Manifest, property inspectors, README, AGENTS.md, skill, ops.toml.example, CHANGELOG, ADR 0003
+- [x] Manifest, property inspectors, README, AGENTS.md, skill, ops.toml.example, CHANGELOG, ADR 0003
 - [ ] Migrate the operator's ops.toml, install, verify on the deck

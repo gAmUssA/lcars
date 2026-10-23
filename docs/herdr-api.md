@@ -183,3 +183,10 @@ Herdr's source is public (`herdrdev/herdr`). Read at tag v0.9.5 (`src/api/subscr
 - **Retained history is 512 events.** A subscriber that falls behind gets `{"error":{"code":"events_lost"}}` and the server closes the connection. Ops treats the close as a disconnect and reconnects with a fresh `session.snapshot`; the error frame itself is now logged.
 - **`pane_updated` emit sites:** terminal title (stripped) change, `agent.rename`, managed-agent reconcile, `pane.set_metadata` token change and token expiry, and an agent-name change inside a state update. `pane.rename` (manual label) only marks the session dirty and emits nothing, matching the 2026-10-19 observation.
 - Full broadcast kinds: workspace created/updated/metadata_updated/closed/renamed/moved/reordered/focused, worktree created/opened/removed, tab created/closed/renamed/moved/focused, pane created/closed/updated/focused/moved/output_changed/exited/agent_detected/agent_status_changed, layout updated.
+
+## Named sessions (observed 2026-10-23)
+
+- Every named session is its own Herdr server with its own socket: `default` at `~/.config/herdr/herdr.sock`, a named one at `~/.config/herdr/sessions/<name>/herdr.sock`. `herdr session list` prints name, status, directory and socket for each; `herdr --session <name> pane list` talks to one.
+- Mini ran three at once (`default` with 1 agent, a project session with 14, another with 1). A client connected to one socket sees nothing of the others: Ops showed 2 of the Mini's 16 agents until each session had its own `[[sessions]]` entry.
+- Pane and workspace ids are per server (`w1:p1` exists in several sessions), so Ops prefixes them with the session name (`<session>/w1:p1`).
+- Several sessions on one remote machine share one SSH ControlMaster; each gets its own forwarded socket under the Ops state dir, named after the session.

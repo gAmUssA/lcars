@@ -7,18 +7,19 @@ Stream Deck console for coding agents. Read `docs/HANDOFF.md` before changing ar
 - Project and Stream Deck plugin: LCARS. Repo layout: `packages/ops`, `packages/plugin`, `packages/skill`.
 - Rust daemon: Ops. Binary `ops`, config `~/.config/ops/ops.toml`, launchd label `io.gamov.lcars.ops`, state dir `~/.local/state/ops` (bearer token lives there).
 - Long-press unblock/approve action: Conn.
-- Hosts in docs and config: Studio (Mac Studio, deck host), Mini (Mac Mini), Laptop (MacBook, travel), Arch Linux Mini (deferred). All on Tailscale MagicDNS. Real host names, usernames and Tailscale IPs stay out of the repo.
+- Herdr's words, everywhere (code, API, config, docs, deck): a **machine** is a computer (SSH alias in config: `machine`); a **session** is one Herdr server with its own socket (`default` or `herdr --session NAME`); a session has **workspaces**, a workspace has **panes**, a pane may run an **agent**. Never "host" for a session, never "session" for a pane.
+- Machines in docs and config: Studio (Mac Studio, the deck's machine), Mini (Mac Mini), Laptop (MacBook, travel), Arch Linux Mini (deferred). All on Tailscale MagicDNS. Real machine names, usernames and Tailscale IPs stay out of the repo.
 
 ## Components
 
 - Ops: Rust, built on kcosr's `herdr-compat` crate pinned by git revision (baseline Herdr 0.9.3; verified against 0.9.4 and 0.9.0, protocol 22). Cargo workspace in `packages/ops`.
 - Plugin: Node 20+/TypeScript, `@elgato/streamdeck` v3, fork of timvdhoorn/stream-deck-herdr-plugin. Thin: paint keys, forward presses to Ops over HTTP + WebSocket with the token from `~/.local/state/ops/token`.
 - Skill: `packages/skill/lcars`, symlinked into `~/.claude/skills` by `make install-skill`.
-- Herdr is the only agent source. Every host runs it. No other agent discovery path.
+- Herdr is the only agent source. Every machine runs it. No other agent discovery path.
 
 ## Herdr rules
 
-- Herdr sockets are server-scoped. Ops holds one connection per host and merges the streams itself.
+- Herdr sockets are server-scoped: one socket per session. Ops holds one connection per `[[sessions]]` entry and merges the streams itself. It does not discover sessions; a new named session needs its own entry.
 - Subscribe to events (`events.subscribe`; `pane.agent_status_changed` needs a `pane_id` per pane). Never poll the CLI or socket for state.
 - One request per connection except the subscription; follow-up reads (`pane.get`, `agent.get`, `agent.read`) run off the event loop.
 - Ops never re-implements what Herdr CLI or the forked plugin already does. It normalises, merges, and relays actions only.

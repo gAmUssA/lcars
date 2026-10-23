@@ -49,7 +49,7 @@ install_ops() {
     echo "kept existing $cfg_dir/ops.toml"
   else
     "$bin_dir/ops" --print-default-config > "$cfg_dir/ops.toml"
-    echo "wrote $cfg_dir/ops.toml — edit the [[hosts]] entries before starting"
+    echo "wrote $cfg_dir/ops.toml — edit the [[sessions]] entries before starting"
   fi
 
   if [ "$plist" -eq 1 ]; then
