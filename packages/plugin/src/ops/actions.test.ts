@@ -32,13 +32,13 @@ function serve(status: number, reply: string): Promise<{ url: string; seen: Seen
   });
 }
 
-test("focus posts the session id to /actions", async () => {
+test("focus posts the pane id to /actions", async () => {
   const { url, seen } = await serve(200, '{"ok":true}');
   expect(await createOpsActions({ url }).focus("mini/w7:p1")).toBe(false);
   expect(seen).toHaveLength(1);
   expect(seen[0].method).toBe("POST");
   expect(seen[0].url).toBe("/actions");
-  expect(JSON.parse(seen[0].body)).toEqual({ action: "focus", session: "mini/w7:p1" });
+  expect(JSON.parse(seen[0].body)).toEqual({ action: "focus", pane: "mini/w7:p1" });
 });
 
 test("focus reports whether Ops revealed the iTerm session", async () => {
@@ -60,17 +60,17 @@ test("scroll posts the delta and returns the applied offset", async () => {
   const { url, seen } = await serve(200, '{"ok":true,"offset_from_bottom":13}');
   const offset = await createOpsActions({ url }).scroll("mini/w7:p1", 3);
   expect(offset).toBe(13);
-  expect(JSON.parse(seen[0].body)).toEqual({ action: "scroll", session: "mini/w7:p1", delta: 3 });
+  expect(JSON.parse(seen[0].body)).toEqual({ action: "scroll", pane: "mini/w7:p1", delta: 3 });
 });
 
 test("sendKeys posts the key list", async () => {
   const { url, seen } = await serve(200, '{"ok":true}');
   await createOpsActions({ url }).sendKeys("studio/w1:p1", ["enter"]);
-  expect(JSON.parse(seen[0].body)).toEqual({ action: "send_keys", session: "studio/w1:p1", keys: ["enter"] });
+  expect(JSON.parse(seen[0].body)).toEqual({ action: "send_keys", pane: "studio/w1:p1", keys: ["enter"] });
 });
 
 test("prompt posts the text", async () => {
   const { url, seen } = await serve(200, '{"ok":true}');
   await createOpsActions({ url }).prompt("studio/w1:p1", "/effort high");
-  expect(JSON.parse(seen[0].body)).toEqual({ action: "prompt", session: "studio/w1:p1", text: "/effort high" });
+  expect(JSON.parse(seen[0].body)).toEqual({ action: "prompt", pane: "studio/w1:p1", text: "/effort high" });
 });

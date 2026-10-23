@@ -21,9 +21,9 @@ type GlobalSettings = { opsUrl?: string; bell?: "on" | "off"; opsTokenPath?: str
 
 streamDeck.logger.setLevel("info");
 
-// The deck's own host, so "the focused pane" prefers this machine's Herdr.
-const localHost = os.hostname().split(".")[0].toLowerCase();
-const store = createFleetStore({ localHost });
+// The deck's own session, so "the focused pane" prefers this machine's Herdr.
+const localSession = os.hostname().split(".")[0].toLowerCase();
+const store = createFleetStore({ localSession });
 let opsUrl = DEFAULT_OPS_URL;
 let tokenPath = defaultTokenPath();
 const token = (): string | null => readToken(tokenPath);
@@ -72,8 +72,8 @@ store.subscribe((state) => {
   const { next, flips } = advance(baseline, state.view, store.allKeys());
   baseline = next;
   for (const flip of flips) {
-    streamDeck.logger.info(`ping: ${flip.session.id} ${flip.kind}`);
-    inbox.flash(flip.session.id);
+    streamDeck.logger.info(`ping: ${flip.pane.id} ${flip.kind}`);
+    inbox.flash(flip.pane.id);
     bell.play(flip.kind);
   }
 });
@@ -108,5 +108,5 @@ for (const dial of dials) streamDeck.actions.registerAction(dial);
 for (const key of globals) streamDeck.actions.registerAction(key);
 
 await streamDeck.connect();
-streamDeck.logger.info(`lcars plugin up on ${localHost}`);
+streamDeck.logger.info(`lcars plugin up on ${localSession}`);
 applyConnection(await streamDeck.settings.getGlobalSettings<GlobalSettings>());

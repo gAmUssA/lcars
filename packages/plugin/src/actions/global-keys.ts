@@ -1,4 +1,4 @@
-// Global keys: Attach (open a terminal on a host's Herdr), Stop All (two-press
+// Global keys: Attach (open a terminal on a machine's Herdr), Stop All (two-press
 // interrupt of every busy agent), Dictate (macOS dictation into iTerm2) and
 // Mute Bell. They share the simple label-key renderer.
 import streamDeck, {
@@ -12,7 +12,7 @@ import { renderLabelKey } from "../core/render";
 import type { FleetStore } from "../core/store";
 import { attachCommand, openWindowScript, startDictationScript, type AttachSettings, type Osa } from "../os/iterm";
 import type { OpsActions } from "../ops/actions";
-import type { Session } from "../ops/types";
+import type { Pane } from "../ops/types";
 
 export const GLOBAL_UUIDS = {
   attach: "io.gamov.lcars.attach",
@@ -22,7 +22,7 @@ export const GLOBAL_UUIDS = {
 } as const;
 
 /** Agents Stop All interrupts: anything mid-turn or waiting on a dialog. */
-export function busySessions(keys: Session[]): Session[] {
+export function busyPanes(keys: Pane[]): Pane[] {
   return keys.filter((s) => s.state === "working" || s.state === "blocked");
 }
 
@@ -74,7 +74,7 @@ export class StopAllAction extends SingletonAction {
     this.renderAll();
   }
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
-    const targets = busySessions(this.store.allKeys());
+    const targets = busyPanes(this.store.allKeys());
     if (this.trigger.press() === "armed") {
       this.renderAll();
       if (this.#timer) clearTimeout(this.#timer);
@@ -99,7 +99,7 @@ export class StopAllAction extends SingletonAction {
     this.renderAll();
   }
   renderAll(): void {
-    const count = busySessions(this.store.allKeys()).length;
+    const count = busyPanes(this.store.allKeys()).length;
     const armed = this.trigger.isArmed();
     const image = renderLabelKey({
       title: armed ? "SURE?" : "STOP",

@@ -22,8 +22,8 @@ pub struct Config {
     /// the operator opts in explicitly.
     #[serde(default)]
     pub allow_remote_listen: bool,
-    #[serde(default)]
-    pub hosts: Vec<HostConfig>,
+    #[serde(default, alias = "hosts")]
+    pub sessions: Vec<SessionConfig>,
     #[serde(default)]
     pub banners: BannersConfig,
 }
@@ -61,18 +61,50 @@ fn default_true() -> bool {
     true
 }
 
+/// One Herdr session: one Herdr server and its socket, on this machine or
+/// on a `machine` reached over SSH. Named like Herdr: `herdr session list`
+/// shows the sockets, `herdr --remote <machine>` reaches the same server.
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct HostConfig {
+pub struct SessionConfig {
+    /// Label on the deck and in the API. Unique across the config.
     pub name: String,
-    /// Local Herdr socket path. Mutually exclusive with `ssh`.
+    /// SSH alias from `~/.ssh/config` for a session on another machine.
+    /// Absent: the session runs on this machine.
+    #[serde(alias = "ssh")]
+    pub machine: Option<String>,
+    /// Herdr socket path on the session's machine. Absolute when `machine`
+    /// is set (the remote side cannot expand `~`).
+    #[serde(alias = "remote_socket")]
     pub socket: Option<String>,
-    /// SSH alias from `~/.ssh/config`. Mutually exclusive with `socket`.
-    pub ssh: Option<String>,
-    /// Absolute Herdr socket path on the remote host. Required with `ssh`.
-    pub remote_socket: Option<String>,
-    /// SSH ControlMaster socket. Defaults to `~/.ssh/cm-<ssh>`.
+    /// SSH ControlMaster socket. Defaults to `~/.ssh/cm-<machine>`.
     pub control_path: Option<String>,
+}
+
+/// Config keys from before sessions were named like Herdr's; they still
+/// parse. Returns the ones `text` uses, for a startup warning.
+pub fn legacy_keys(text: &str) -> Vec<&'static str> {
+    let Ok(value) = text.parse::<toml::Table>() else {
+        return Vec::new();
+    };
+    let mut found = Vec::new();
+    if value.contains_key("hosts") {
+        found.push("[[hosts]] (now [[sessions]])");
+    }
+    let entries = value
+        .get("hosts")
+        .or_else(|| value.get("sessions"))
+        .and_then(|v| v.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let uses = |key: &str| entries.iter().any(|e| e.get(key).is_some());
+    if uses("ssh") {
+        found.push("ssh (now machine)");
+    }
+    if uses("remote_socket") {
+        found.push("remote_socket (now socket)");
+    }
+    found
 }
 
 fn default_listen() -> String {
@@ -111,7 +143,7 @@ pub fn expand_tilde(value: &str) -> PathBuf {
 pub fn load(path: &Path) -> Result<Config> {
     let text = std::fs::read_to_string(path).with_context(|| {
         format!(
-            "config file not found at {} — run `ops --print-default-config > {}` and edit the hosts",
+            "config file not found at {} — run `ops --print-default-config > {}` and edit the sessions",
             path.display(),
             path.display()
         )
@@ -136,16 +168,16 @@ impl Config {
                 self.listen
             );
         }
-        if self.hosts.is_empty() {
-            bail!("no [[hosts]] configured — add at least one host with `socket` or `ssh`");
+        if self.sessions.is_empty() {
+            bail!("no [[sessions]] configured — add one with `socket` (this machine) or `machine` plus `socket` (over SSH)");
         }
         let mut seen = std::collections::BTreeSet::new();
-        for host in &self.hosts {
-            host.validate()?;
-            if !seen.insert(host.name.as_str()) {
+        for session in &self.sessions {
+            session.validate()?;
+            if !seen.insert(session.name.as_str()) {
                 bail!(
-                    "duplicate host name `{}` — host names must be unique",
-                    host.name
+                    "duplicate session name `{}` — session names must be unique",
+                    session.name
                 );
             }
         }
@@ -153,55 +185,48 @@ impl Config {
     }
 }
 
-impl HostConfig {
+impl SessionConfig {
     pub fn validate(&self) -> Result<()> {
         if self.name.is_empty() {
-            bail!("a [[hosts]] entry has an empty `name`");
+            bail!("a [[sessions]] entry has an empty `name`");
         }
-        match (&self.socket, &self.ssh) {
-            (Some(_), Some(_)) => bail!(
-                "host `{}` sets both `socket` and `ssh` — pick one",
+        let Some(socket) = &self.socket else {
+            bail!(
+                "session `{}` has no `socket` — set it to the Herdr socket path (`herdr session list` prints it)",
                 self.name
-            ),
-            (None, None) => bail!(
-                "host `{}` needs either `socket` (local) or `ssh` (remote alias)",
-                self.name
-            ),
-            (None, Some(_)) => match &self.remote_socket {
-                Some(remote) if remote.starts_with('/') => Ok(()),
-                Some(remote) => bail!(
-                    "host `{}`: `remote_socket` must be absolute, got `{}` (the remote side cannot expand ~)",
-                    self.name,
-                    remote
-                ),
-                None => bail!(
-                    "host `{}` uses `ssh` but has no `remote_socket` — set it to the absolute Herdr socket path on that machine",
+            );
+        };
+        if let Some(machine) = &self.machine {
+            if !socket.starts_with('/') {
+                bail!(
+                    "session `{}`: `socket` must be absolute on machine `{machine}`, got `{socket}` (the remote side cannot expand ~)",
                     self.name
-                ),
-            },
-            (Some(_), None) => Ok(()),
+                );
+            }
         }
+        Ok(())
     }
 
-    /// Build the transport for this host. `state_dir` holds forwarded sockets.
+    /// True when the session's Herdr runs on this machine.
+    pub fn is_local(&self) -> bool {
+        self.machine.is_none()
+    }
+
+    /// Build the transport for this session. `state_dir` holds forwarded sockets.
     pub fn transport(&self, state_dir: &Path) -> Result<Transport> {
-        if let Some(socket) = &self.socket {
+        let socket = self.socket.clone().expect("validated: socket present");
+        let Some(machine) = self.machine.clone() else {
             return Ok(Transport::Local {
-                socket: expand_tilde(socket),
+                socket: expand_tilde(&socket),
             });
-        }
-        let alias = self.ssh.clone().expect("validated: ssh present");
-        let remote_socket = self
-            .remote_socket
-            .clone()
-            .expect("validated: remote_socket present");
+        };
         let control_path = match &self.control_path {
             Some(path) => expand_tilde(path),
-            None => expand_tilde(&format!("~/.ssh/cm-{alias}")),
+            None => expand_tilde(&format!("~/.ssh/cm-{machine}")),
         };
         Transport::ssh(
-            alias,
-            remote_socket,
+            machine,
+            socket,
             control_path,
             state_dir.join(format!("{}.sock", self.name)),
         )
@@ -212,73 +237,93 @@ impl HostConfig {
 mod tests {
     use super::*;
 
+    const LOCAL: &str = "[[sessions]]\nname = \"a\"\nsocket = \"/a\"\n";
+
     #[test]
-    fn example_config_parses_with_two_hosts() {
+    fn example_config_parses_with_a_local_and_a_remote_session() {
         let config = parse(DEFAULT_CONFIG).expect("example config must parse");
         assert_eq!(config.listen, "127.0.0.1:7677");
-        assert_eq!(config.hosts.len(), 2);
-        assert_eq!(config.hosts[0].name, "studio");
-        assert_eq!(config.hosts[1].ssh.as_deref(), Some("mini"));
+        assert_eq!(config.sessions.len(), 3);
+        assert_eq!(config.sessions[0].name, "studio");
+        assert!(config.sessions[0].is_local());
+        assert_eq!(config.sessions[1].machine.as_deref(), Some("mini"));
+        assert!(legacy_keys(DEFAULT_CONFIG).is_empty());
     }
 
     #[test]
     fn listen_defaults_when_omitted() {
-        let config = parse("[[hosts]]\nname = \"a\"\nsocket = \"/tmp/h.sock\"\n").unwrap();
+        let config = parse("[[sessions]]\nname = \"a\"\nsocket = \"/tmp/h.sock\"\n").unwrap();
         assert_eq!(config.listen, DEFAULT_LISTEN);
     }
 
     #[test]
     fn rejects_non_loopback_listen_unless_opted_in() {
-        let err = parse("listen = \"0.0.0.0:7677\"\n[[hosts]]\nname = \"a\"\nsocket = \"/a\"\n")
-            .unwrap_err();
+        let err = parse(&format!("listen = \"0.0.0.0:7677\"\n{LOCAL}")).unwrap_err();
         assert!(err.to_string().contains("loopback"), "{err}");
-        let ok = parse("listen = \"0.0.0.0:7677\"\nallow_remote_listen = true\n[[hosts]]\nname = \"a\"\nsocket = \"/a\"\n");
+        let ok = parse(&format!(
+            "listen = \"0.0.0.0:7677\"\nallow_remote_listen = true\n{LOCAL}"
+        ));
         assert!(ok.is_ok());
-        let err =
-            parse("listen = \"nonsense\"\n[[hosts]]\nname = \"a\"\nsocket = \"/a\"\n").unwrap_err();
+        let err = parse(&format!("listen = \"nonsense\"\n{LOCAL}")).unwrap_err();
         assert!(err.to_string().contains("host:port"), "{err}");
     }
 
     #[test]
-    fn rejects_empty_host_list() {
+    fn rejects_empty_session_list() {
         let err = parse("listen = \"127.0.0.1:1\"\n").unwrap_err();
-        assert!(err.to_string().contains("no [[hosts]]"), "{err}");
+        assert!(err.to_string().contains("no [[sessions]]"), "{err}");
     }
 
     #[test]
-    fn rejects_host_with_both_socket_and_ssh() {
-        let err = parse(
-            "[[hosts]]\nname = \"x\"\nsocket = \"/a\"\nssh = \"x\"\nremote_socket = \"/b\"\n",
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("both `socket` and `ssh`"), "{err}");
+    fn rejects_session_without_socket() {
+        let err = parse("[[sessions]]\nname = \"x\"\nmachine = \"x\"\n").unwrap_err();
+        assert!(err.to_string().contains("no `socket`"), "{err}");
+        assert!(err.to_string().contains("herdr session list"), "{err}");
     }
 
     #[test]
-    fn rejects_ssh_host_without_remote_socket() {
-        let err = parse("[[hosts]]\nname = \"x\"\nssh = \"x\"\n").unwrap_err();
-        assert!(err.to_string().contains("no `remote_socket`"), "{err}");
-    }
-
-    #[test]
-    fn rejects_relative_remote_socket() {
-        let err = parse("[[hosts]]\nname = \"x\"\nssh = \"x\"\nremote_socket = \"~/h.sock\"\n")
+    fn remote_socket_must_be_absolute_local_may_use_tilde() {
+        let err = parse("[[sessions]]\nname = \"x\"\nmachine = \"x\"\nsocket = \"~/h.sock\"\n")
             .unwrap_err();
         assert!(err.to_string().contains("must be absolute"), "{err}");
+        let ok = parse("[[sessions]]\nname = \"x\"\nsocket = \"~/h.sock\"\n").unwrap();
+        assert!(ok.sessions[0].is_local());
     }
 
     #[test]
-    fn rejects_duplicate_host_names() {
-        let err = parse(
-            "[[hosts]]\nname = \"a\"\nsocket = \"/a\"\n[[hosts]]\nname = \"a\"\nsocket = \"/b\"\n",
-        )
-        .unwrap_err();
-        assert!(err.to_string().contains("duplicate host name"), "{err}");
+    fn legacy_host_config_still_parses_and_is_reported() {
+        let old = "[[hosts]]\nname = \"studio\"\nsocket = \"~/s.sock\"\n[[hosts]]\nname = \"mini\"\nssh = \"ds\"\nremote_socket = \"/r.sock\"\ncontrol_path = \"~/.ssh/cm-ds\"\n";
+        let config = parse(old).unwrap();
+        assert_eq!(config.sessions.len(), 2);
+        assert_eq!(config.sessions[1].machine.as_deref(), Some("ds"));
+        assert_eq!(config.sessions[1].socket.as_deref(), Some("/r.sock"));
+        assert_eq!(
+            legacy_keys(old),
+            vec![
+                "[[hosts]] (now [[sessions]])",
+                "ssh (now machine)",
+                "remote_socket (now socket)"
+            ]
+        );
+    }
+
+    #[test]
+    fn old_and_new_key_for_one_field_is_an_error() {
+        let err =
+            parse("[[sessions]]\nname = \"x\"\nmachine = \"a\"\nssh = \"b\"\nsocket = \"/s\"\n")
+                .unwrap_err();
+        assert!(format!("{err:#}").contains("duplicate"), "{err:#}");
+    }
+
+    #[test]
+    fn rejects_duplicate_session_names() {
+        let err = parse(&format!("{LOCAL}{LOCAL}")).unwrap_err();
+        assert!(err.to_string().contains("duplicate session name"), "{err}");
     }
 
     #[test]
     fn banners_default_off_with_sound() {
-        let config = parse("[[hosts]]\nname = \"a\"\nsocket = \"/s\"\n").unwrap();
+        let config = parse(LOCAL).unwrap();
         assert_eq!(config.banners, BannersConfig::default());
         assert!(!config.banners.enabled);
         assert!(config.banners.sound);
@@ -286,21 +331,19 @@ mod tests {
 
     #[test]
     fn banners_section_parses_and_rejects_typos() {
-        let config = parse(
-            "[banners]\nenabled = true\nsound = false\nalerter = \"/x/alerter\"\n[[hosts]]\nname = \"a\"\nsocket = \"/s\"\n",
-        )
+        let config = parse(&format!(
+            "[banners]\nenabled = true\nsound = false\nalerter = \"/x/alerter\"\n{LOCAL}"
+        ))
         .unwrap();
         assert!(config.banners.enabled);
         assert!(!config.banners.sound);
         assert_eq!(config.banners.alerter.as_deref(), Some("/x/alerter"));
-        assert!(
-            parse("[banners]\nenable = true\n[[hosts]]\nname = \"a\"\nsocket = \"/s\"\n").is_err()
-        );
+        assert!(parse(&format!("[banners]\nenable = true\n{LOCAL}")).is_err());
     }
 
     #[test]
     fn rejects_unknown_keys() {
-        let err = parse("[[hosts]]\nname = \"a\"\nsocket = \"/a\"\npoll_ms = 3000\n").unwrap_err();
+        let err = parse(&format!("{LOCAL}poll_ms = 3000\n")).unwrap_err();
         let text = format!("{err:#}");
         assert!(text.contains("poll_ms"), "{text}");
     }
@@ -322,15 +365,14 @@ mod tests {
     }
 
     #[test]
-    fn ssh_host_transport_defaults_control_path_from_alias() {
-        let host = HostConfig {
-            name: "mini".into(),
-            socket: None,
-            ssh: Some("mini".into()),
-            remote_socket: Some("/Users/v/.config/herdr/herdr.sock".into()),
+    fn remote_session_transport_defaults_control_path_from_machine() {
+        let session = SessionConfig {
+            name: "talk".into(),
+            machine: Some("mini".into()),
+            socket: Some("/Users/v/.config/herdr/sessions/talk/herdr.sock".into()),
             control_path: None,
         };
-        let transport = host.transport(Path::new("/tmp/ops-state")).unwrap();
+        let transport = session.transport(Path::new("/tmp/ops-state")).unwrap();
         match transport {
             Transport::Ssh {
                 alias,
@@ -340,7 +382,7 @@ mod tests {
             } => {
                 assert_eq!(alias, "mini");
                 assert_eq!(control_path, expand_tilde("~/.ssh/cm-mini"));
-                assert_eq!(local_socket, PathBuf::from("/tmp/ops-state/mini.sock"));
+                assert_eq!(local_socket, PathBuf::from("/tmp/ops-state/talk.sock"));
             }
             other => panic!("expected ssh transport, got {other:?}"),
         }

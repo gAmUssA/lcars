@@ -1,4 +1,4 @@
-//! `ops` binary: load config, run one Herdr client per host, merge, serve.
+//! `ops` binary: load config, run one Herdr client per session, merge, serve.
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -8,8 +8,8 @@ use anyhow::{bail, Context, Result};
 use ops::actions::ActionRelay;
 use ops::banners::{Baseline, Notifier};
 use ops::config::{self, Config};
-use ops::herdr::client::HostClient;
-use ops::model::{Fleet, HostEvent};
+use ops::herdr::client::SessionClient;
+use ops::model::{Fleet, SessionEvent};
 use ops::reveal::Revealer;
 use ops::server::{self, FleetView, ServeOptions};
 use tokio::net::TcpListener;
@@ -18,7 +18,7 @@ use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 const USAGE: &str = "\
-ops — LCARS daemon: merges Herdr state from every host for the Stream Deck plugin
+ops — LCARS daemon: merges Herdr state from every session for the Stream Deck plugin
 
 Usage:
   ops [--config PATH]        Run (default config: ~/.config/ops/ops.toml)
@@ -91,7 +91,7 @@ async fn run(config_path: PathBuf) -> Result<()> {
     let state_dir = config::state_dir();
     let token = server::load_or_create_token(&state_dir)
         .with_context(|| format!("cannot create the API token under {}", state_dir.display()))?;
-    info!(config = %config_path.display(), hosts = config.hosts.len(), token_file = %server::token_path(&state_dir).display(), "ops starting");
+    info!(config = %config_path.display(), sessions = config.sessions.len(), token_file = %server::token_path(&state_dir).display(), "ops starting");
 
     let listener = TcpListener::bind(&config.listen).await.with_context(|| {
         format!(
@@ -100,29 +100,36 @@ async fn run(config_path: PathBuf) -> Result<()> {
         )
     })?;
 
-    let mut fleet = Fleet::with_hosts(
+    if let Ok(text) = std::fs::read_to_string(&config_path) {
+        let legacy = config::legacy_keys(&text);
+        if !legacy.is_empty() {
+            warn!(config = %config_path.display(), keys = %legacy.join(", "), "ops.toml uses old key names; they still work, rename them when convenient");
+        }
+    }
+
+    let mut fleet = Fleet::with_sessions(
         config
-            .hosts
+            .sessions
             .iter()
-            .map(|h| (h.name.as_str(), h.socket.is_some())),
+            .map(|s| (s.name.as_str(), s.machine.as_deref())),
         now_ms(),
     );
     let (view_tx, view_rx) = watch::channel(Arc::new(FleetView::from_fleet(&fleet)));
     let (updates, _) = broadcast::channel(server::UPDATE_BUFFER);
-    let (event_tx, mut event_rx) = mpsc::channel::<(String, HostEvent)>(256);
+    let (event_tx, mut event_rx) = mpsc::channel::<(String, SessionEvent)>(256);
 
     let mut transports = std::collections::HashMap::new();
     let mut local_sockets = std::collections::HashMap::new();
-    for host in &config.hosts {
-        if let Some(socket) = &host.socket {
-            local_sockets.insert(host.name.clone(), config::expand_tilde(socket));
+    for session in &config.sessions {
+        if let (true, Some(socket)) = (session.is_local(), &session.socket) {
+            local_sockets.insert(session.name.clone(), config::expand_tilde(socket));
         }
-        let transport = host
+        let transport = session
             .transport(&state_dir)
-            .with_context(|| format!("host `{}`", host.name))?;
-        info!(host = %host.name, via = %transport.describe(), "starting herdr client");
-        transports.insert(host.name.clone(), transport.clone());
-        tokio::spawn(HostClient::new(host.name.clone(), transport).run(event_tx.clone()));
+            .with_context(|| format!("session `{}`", session.name))?;
+        info!(session = %session.name, via = %transport.describe(), "starting herdr client");
+        transports.insert(session.name.clone(), transport.clone());
+        tokio::spawn(SessionClient::new(session.name.clone(), transport).run(event_tx.clone()));
     }
     drop(event_tx);
     let relay = Arc::new(ActionRelay::new(transports));
@@ -160,13 +167,13 @@ async fn run(config_path: PathBuf) -> Result<()> {
                 return Ok(());
             }
             next = event_rx.recv() => {
-                let Some((host, event)) = next else { bail!("all host clients stopped") };
-                log_event(&host, &event);
-                if fleet.apply(&host, event, now_ms()) {
+                let Some((session, event)) = next else { bail!("all session clients stopped") };
+                log_event(&session, &event);
+                if fleet.apply(&session, event, now_ms()) {
                     let view = Arc::new(FleetView::from_fleet(&fleet));
                     if let Some(notifier) = &notifier {
                         let flips = baseline.advance(&view);
-                        notifier.show(flips, view.hosts.len() > 1);
+                        notifier.show(flips, view.sessions.len() > 1);
                     }
                     server::publish(&view_tx, &updates, view);
                 }
@@ -175,44 +182,49 @@ async fn run(config_path: PathBuf) -> Result<()> {
     }
 }
 
-fn log_event(host: &str, event: &HostEvent) {
+fn log_event(session: &str, event: &SessionEvent) {
     match event {
-        HostEvent::Connected { version, protocol } => {
-            info!(host, version, protocol, "host connected")
+        SessionEvent::Connected { version, protocol } => {
+            info!(session, version, protocol, "session connected")
         }
-        HostEvent::Disconnected { error } => warn!(host, error, "host disconnected"),
-        HostEvent::Snapshot { panes, agents } => {
-            info!(host, panes = panes.len(), agents = agents.len(), "snapshot")
+        SessionEvent::Disconnected { error } => warn!(session, error, "session disconnected"),
+        SessionEvent::Snapshot { panes, agents } => {
+            info!(
+                session,
+                panes = panes.len(),
+                agents = agents.len(),
+                "snapshot"
+            )
         }
-        HostEvent::StatusChanged(e) => info!(
-            host,
+        SessionEvent::StatusChanged(e) => info!(
+            session,
             pane = %e.pane_id,
             agent = e.agent.as_deref().unwrap_or("-"),
             status = ?e.agent_status,
             title = e.title.as_deref().unwrap_or(""),
             "status"
         ),
-        HostEvent::PaneCreated(p) => info!(host, pane = %p.pane_id, "pane created"),
-        HostEvent::PaneClosed { pane_id } => info!(host, pane = %pane_id, "pane closed"),
-        HostEvent::AgentDetected {
+        SessionEvent::PaneCreated(p) => info!(session, pane = %p.pane_id, "pane created"),
+        SessionEvent::PaneClosed { pane_id } => info!(session, pane = %pane_id, "pane closed"),
+        SessionEvent::AgentDetected {
             pane_id,
             agent,
             released,
         } => {
-            info!(host, pane = %pane_id, agent = agent.as_deref().unwrap_or("-"), released, "agent detected")
+            info!(session, pane = %pane_id, agent = agent.as_deref().unwrap_or("-"), released, "agent detected")
         }
-        HostEvent::PaneRefreshed(p) => {
-            info!(host, pane = %p.pane_id, title = p.terminal_title_stripped.as_deref().unwrap_or(""), "pane refreshed")
+        SessionEvent::PaneRefreshed(p) => {
+            info!(session, pane = %p.pane_id, title = p.terminal_title_stripped.as_deref().unwrap_or(""), "pane refreshed")
         }
-        HostEvent::AgentRefreshed(a) => {
-            info!(host, pane = %a.pane_id, status = ?a.agent_status, done = a.completion_seq == Some(a.state_change_seq) && !a.focused, "agent refreshed")
+        SessionEvent::AgentRefreshed(a) => {
+            info!(session, pane = %a.pane_id, status = ?a.agent_status, done = a.completion_seq == Some(a.state_change_seq) && !a.focused, "agent refreshed")
         }
-        HostEvent::PaneFocused { pane_id } => info!(host, pane = %pane_id, "pane focused"),
-        HostEvent::Workspaces(list) => info!(host, workspaces = list.len(), "workspaces"),
-        HostEvent::PromptRead { pane_id, prompt } => {
-            info!(host, pane = %pane_id, prompt = prompt.as_deref().unwrap_or("-"), "prompt read")
+        SessionEvent::PaneFocused { pane_id } => info!(session, pane = %pane_id, "pane focused"),
+        SessionEvent::Workspaces(list) => info!(session, workspaces = list.len(), "workspaces"),
+        SessionEvent::PromptRead { pane_id, prompt } => {
+            info!(session, pane = %pane_id, prompt = prompt.as_deref().unwrap_or("-"), "prompt read")
         }
-        HostEvent::WorkspacesChanged => info!(host, "workspaces changed"),
+        SessionEvent::WorkspacesChanged => info!(session, "workspaces changed"),
     }
 }
 

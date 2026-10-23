@@ -1,6 +1,6 @@
 // Key images as inline SVG data URIs. Adapted from
 // timvdhoorn/stream-deck-herdr-plugin (MIT, see THIRD_PARTY_NOTICES.md):
-// status colour + glyph, agent badge, wrapped label. LCARS adds the host tag
+// status colour + glyph, agent badge, wrapped label. LCARS adds the session tag
 // and the dimmed "Ops offline" treatment; the pin marker is gone.
 import { presentation, type AgentStatus } from "./status";
 import { AGENT_ICON } from "./agent-icons";
@@ -9,8 +9,8 @@ export type KeyView = {
   label: string;
   status: AgentStatus;
   agent: string;
-  /** Short host tag for a multi-host fleet, or null. */
-  host: string | null;
+  /** Short session tag for a multi-session fleet, or null. */
+  session: string | null;
   /** False when Ops is unreachable: the key keeps its last state but dims. */
   live: boolean;
 };
@@ -137,7 +137,7 @@ export type WorkspaceView = {
   label: string;
   state: AgentStatus;
   agents: number;
-  host: string | null;
+  session: string | null;
   focused: boolean;
   live: boolean;
 };
@@ -151,14 +151,14 @@ export function renderWorkspaceKey(view: WorkspaceView | null): string {
     .map((line, i) => `<text x="72" y="${64 + i * 22}" font-family="sans-serif" font-size="${LABEL_FONT_PX}" font-weight="bold" fill="#fff" text-anchor="middle">${escapeXml(line)}</text>`)
     .join("");
   const agents = view.agents === 1 ? "1 agent" : `${view.agents} agents`;
-  const host = view.host ? `<text x="136" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" fill-opacity="0.8" text-anchor="end">${escapeXml(view.host)}</text>` : "";
+  const session = view.session ? `<text x="136" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" fill-opacity="0.8" text-anchor="end">${escapeXml(view.session)}</text>` : "";
   const ring = view.focused ? `<rect x="4" y="4" width="136" height="136" rx="14" fill="none" stroke="#fff" stroke-width="4"/>` : "";
   const dim = view.live ? "" : `<rect width="144" height="144" rx="16" fill="#000" fill-opacity="0.6"/>`;
   return toDataUri(
     `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144">` +
       `<rect width="144" height="144" rx="16" fill="${color}"/>` +
       `<text x="10" y="26" font-family="sans-serif" font-size="14" fill="#fff" fill-opacity="0.8" text-anchor="start">WS</text>` +
-      host +
+      session +
       labelSvg +
       `<text x="72" y="122" font-family="sans-serif" font-size="16" fill="#fff" fill-opacity="0.85" text-anchor="middle">${escapeXml(agents)}</text>` +
       ring +
@@ -189,8 +189,8 @@ export function renderKeySvg(view: KeyView | null): string {
       return `<text x="72" y="${y}" font-family="sans-serif" font-size="${LABEL_FONT_PX}" fill="#fff" text-anchor="middle">${escapeXml(line)}</text>`;
     })
     .join("");
-  const host = view.host
-    ? `<text x="136" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" fill-opacity="0.8" text-anchor="end">${escapeXml(view.host)}</text>`
+  const session = view.session
+    ? `<text x="136" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#ffffff" fill-opacity="0.8" text-anchor="end">${escapeXml(view.session)}</text>`
     : "";
   // Dim the whole key when Ops is gone so stale state reads as stale.
   const dim = view.live ? "" : `<rect width="144" height="144" rx="16" fill="#000" fill-opacity="0.6"/>`;
@@ -199,7 +199,7 @@ export function renderKeySvg(view: KeyView | null): string {
       `<rect width="144" height="144" rx="16" fill="${color}"/>` +
       `<text x="10" y="26" font-family="sans-serif" font-size="20" fill="#fff" text-anchor="start">${glyph}</text>` +
       agentBadge(view.agent) +
-      host +
+      session +
       labelSvg +
       dim +
       `</svg>`,

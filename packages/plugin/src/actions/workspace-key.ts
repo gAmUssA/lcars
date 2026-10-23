@@ -1,6 +1,6 @@
 // Workspace Key: one Herdr workspace per key. Colour is Herdr's roll-up of
 // the agents inside, the label is the workspace name, the subtitle counts
-// agents and names the host. Press focuses the workspace and raises iTerm2.
+// agents and names the session. Press focuses the workspace and raises iTerm2.
 import streamDeck, {
   SingletonAction,
   type DidReceiveSettingsEvent,
@@ -23,9 +23,9 @@ export function workspaceSlot(settings: WorkspaceSettings): number {
   return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0;
 }
 
-/** Agents (sessions with an agent) inside a workspace, from the current view. */
+/** Agents (panes with an agent) inside a workspace, from the current view. */
 export function agentsIn(store: FleetStore, workspace: Workspace): number {
-  return store.allKeys().filter((s) => s.host === workspace.host && s.workspace_id === workspace.workspace_id).length;
+  return store.allKeys().filter((s) => s.session === workspace.session && s.workspace_id === workspace.workspace_id).length;
 }
 
 export class WorkspaceKeyAction extends SingletonAction<WorkspaceSettings> {
@@ -68,7 +68,7 @@ export class WorkspaceKeyAction extends SingletonAction<WorkspaceSettings> {
 
   renderAll(): void {
     const state = this.store.getState();
-    const multiHost = (state.view?.hosts.length ?? 0) > 1;
+    const multiSession = (state.view?.sessions.length ?? 0) > 1;
     this.actions.forEach((a) => {
       if (!a.isKey()) return;
       const slot = this.#slots.get(a.id) ?? 0;
@@ -78,15 +78,15 @@ export class WorkspaceKeyAction extends SingletonAction<WorkspaceSettings> {
         void a.setImage(renderWorkspaceKey(null));
         return;
       }
-      const hostUp = state.view?.hosts.find((h) => h.name === workspace.host)?.connected !== false;
+      const sessionUp = state.view?.sessions.find((h) => h.name === workspace.session)?.connected !== false;
       void a.setImage(
         renderWorkspaceKey({
           label: workspace.label,
           state: workspace.state,
           agents: agentsIn(this.store, workspace),
-          host: multiHost ? workspace.host.slice(0, 4).toUpperCase() : null,
+          session: multiSession ? workspace.session.slice(0, 4).toUpperCase() : null,
           focused: workspace.focused,
-          live: state.healthy && hostUp,
+          live: state.healthy && sessionUp,
         }),
       );
     });

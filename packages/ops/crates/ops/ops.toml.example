@@ -1,14 +1,19 @@
 # Ops configuration. Copy to ~/.config/ops/ops.toml and edit.
 #
-# Ops holds one Herdr socket connection per host listed here, merges the
-# streams into one session list, and serves it on `listen` for the LCARS
-# Stream Deck plugin (GET /sessions, WebSocket /ws).
+# Ops holds one connection per Herdr session listed here and merges them
+# into one fleet of sessions, workspaces and panes for the LCARS Stream Deck
+# plugin (GET /fleet, WebSocket /fleet/ws).
+#
+# A Herdr session is one Herdr server with its own socket: `herdr` starts the
+# `default` session, `herdr --session NAME` a named one. `herdr session list`
+# prints every session on a machine with its socket path. List each session
+# you want on the deck; Ops does not discover them.
 
 # Local address the plugin connects to. Loopback only; Ops never listens on a
 # network interface.
 listen = "127.0.0.1:7677"
 
-# Desktop banners when an agent blocks or finishes a turn, for every host
+# Desktop banners when an agent blocks or finishes a turn, in any session
 # below; clicking one focuses the pane and reveals its iTerm session. Needs
 # `alerter` (brew install vjeantet/tap/alerter). While enabled, Ops tells the
 # herdr-notify plugin to stay silent so each event rings once.
@@ -18,20 +23,29 @@ enabled = false
 # icon = "~/Pictures/lcars.png"
 # sound = true
 
-# Local host: connect straight to the Herdr socket on this machine.
-[[hosts]]
+# A session on this machine: connect straight to its socket. `name` is the
+# label on the deck; its first four letters tag the keys.
+[[sessions]]
 name = "studio"
 socket = "~/.config/herdr/herdr.sock"
 
-# Remote host over SSH. Ops never authenticates itself; it rides an SSH
+# Sessions on another machine, over SSH. `machine` is an alias from
+# ~/.ssh/config. Ops never authenticates itself; it rides an SSH
 # ControlMaster you open after login (1Password owns the keys):
 #
 #   ssh -fNM -o ControlPath=~/.ssh/cm-mini -o ControlPersist=8h mini
 #
-# `ssh` is an alias from ~/.ssh/config. `remote_socket` must be absolute; the
-# remote side cannot expand `~`. `control_path` defaults to ~/.ssh/cm-<ssh>.
-[[hosts]]
+# `socket` must be absolute on a remote machine; the remote side cannot
+# expand `~`. `control_path` defaults to ~/.ssh/cm-<machine>. Several
+# sessions on one machine share its ControlMaster.
+[[sessions]]
 name = "mini"
-ssh = "mini"
-remote_socket = "/Users/me/.config/herdr/herdr.sock"
+machine = "mini"
+socket = "/Users/me/.config/herdr/herdr.sock"
+control_path = "~/.ssh/cm-mini"
+
+[[sessions]]
+name = "research"
+machine = "mini"
+socket = "/Users/me/.config/herdr/sessions/research/herdr.sock"
 control_path = "~/.ssh/cm-mini"

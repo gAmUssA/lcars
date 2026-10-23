@@ -22,11 +22,11 @@ export type OpsClientOptions = {
   onLog?: (message: string) => void;
 };
 
-/** `http://127.0.0.1:7677` → `ws://127.0.0.1:7677/ws`. */
+/** `http://127.0.0.1:7677` → `ws://127.0.0.1:7677/fleet/ws`. */
 export function wsUrl(base: string): string {
   const url = new URL(base);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.pathname = url.pathname.replace(/\/$/, "") + "/ws";
+  url.pathname = url.pathname.replace(/\/$/, "") + "/fleet/ws";
   url.search = "";
   return url.toString();
 }

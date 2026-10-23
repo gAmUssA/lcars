@@ -3,8 +3,8 @@
 // dial the slice under it, so the strip reads as a single surface.
 import { presentation } from "./status";
 import { escapeXml } from "./render";
-import type { HostStatus, Session } from "../ops/types";
-import type { Effort, HostSummary, StripMode } from "./view-state";
+import type { SessionStatus, Pane } from "../ops/types";
+import type { Effort, SessionSummary, StripMode } from "./view-state";
 
 export const STRIP_WIDTH = 800;
 export const SEGMENT_WIDTH = 200;
@@ -13,23 +13,23 @@ export const SEGMENTS = 4;
 
 export type StripScene = {
   mode: StripMode;
-  hosts: HostSummary[];
-  hostFilter: string | null;
+  sessions: SessionSummary[];
+  sessionFilter: string | null;
   page: number;
   pages: number;
   effort: Effort;
-  /** Blocked sessions in ticker order and the cursor into them. */
-  blocked: Session[];
+  /** Blocked panes in ticker order and the cursor into them. */
+  blocked: Pane[];
   tickerIndex: number;
   /** Counts across the visible keys, for the "all quiet" ticker. */
-  totals: Record<Session["state"], number>;
+  totals: Record<Pane["state"], number>;
   live: boolean;
 };
 
 export type StripTap =
-  | { kind: "host"; host: string }
+  | { kind: "session"; session: string }
   | { kind: "clear-filter" }
-  | { kind: "focus"; sessionId: string }
+  | { kind: "focus"; paneId: string }
   | { kind: "none" };
 
 const FONT = `font-family="sans-serif"`;
@@ -42,11 +42,11 @@ function dim(color: string, live: boolean): string {
   return live ? color : "#1a1a1a";
 }
 
-function hostBlock(i: number, summary: HostSummary, scene: StripScene): string {
+function sessionBlock(i: number, summary: SessionSummary, scene: StripScene): string {
   const x = i * SEGMENT_WIDTH;
-  const online = summary.host?.connected ?? true;
+  const online = summary.session?.connected ?? true;
   const color = !online ? "#3a3a3a" : summary.worst ? presentation(summary.worst).color : "#374151";
-  const selected = scene.hostFilter === summary.name;
+  const selected = scene.sessionFilter === summary.name;
   const border = selected ? `<rect x="${x + 3}" y="3" width="${SEGMENT_WIDTH - 6}" height="${STRIP_HEIGHT - 6}" rx="10" fill="none" stroke="#fff" stroke-width="4"/>` : "";
   const c = summary.counts;
   const detail = !online
@@ -74,15 +74,15 @@ function labelBlock(i: number, title: string, value: string, scene: StripScene):
 
 function fleetScene(scene: StripScene): string {
   const blocks: string[] = [];
-  const hosts = scene.hosts.slice(0, SEGMENTS);
-  hosts.forEach((h, i) => blocks.push(hostBlock(i, h, scene)));
-  // Remaining segments carry the dial read-outs that have no host to show.
+  const sessions = scene.sessions.slice(0, SEGMENTS);
+  sessions.forEach((h, i) => blocks.push(sessionBlock(i, h, scene)));
+  // Remaining segments carry the dial read-outs that have no session to show.
   const labels: [string, string][] = [
     ["PAGE", `${scene.page + 1}/${scene.pages}`],
     ["EFFORT", scene.effort],
-    ["FILTER", scene.hostFilter ?? "all"],
+    ["FILTER", scene.sessionFilter ?? "all"],
   ];
-  for (let i = hosts.length, l = 0; i < SEGMENTS && l < labels.length; i++, l++) {
+  for (let i = sessions.length, l = 0; i < SEGMENTS && l < labels.length; i++, l++) {
     blocks.push(labelBlock(i, labels[l][0], labels[l][1], scene));
   }
   return blocks.join("");
@@ -101,7 +101,7 @@ function tickerScene(scene: StripScene): string {
   }
   const red = presentation("blocked").color;
   const title = current.pending_prompt ?? current.title ?? current.name ?? current.agent ?? current.pane_id;
-  const who = `${(current.name ?? current.agent ?? "agent").toUpperCase()} on ${current.host.toUpperCase()}`;
+  const who = `${(current.name ?? current.agent ?? "agent").toUpperCase()} on ${current.session.toUpperCase()}`;
   return (
     `<rect x="0" y="0" width="${SEGMENT_WIDTH}" height="${STRIP_HEIGHT}" fill="${dim(red, scene.live)}"/>` +
     text(16, 42, 30, "BLOCKED", `font-weight="bold"`) +
@@ -135,22 +135,22 @@ export function renderStripSegment(scene: StripScene, segment: number): string {
 export function stripTap(scene: StripScene, segment: number, x: number): StripTap {
   if (scene.mode === "ticker") {
     const current = scene.blocked[scene.tickerIndex];
-    return current ? { kind: "focus", sessionId: current.id } : { kind: "none" };
+    return current ? { kind: "focus", paneId: current.id } : { kind: "none" };
   }
-  const host = scene.hosts[segment];
-  if (!host) return { kind: "none" };
+  const session = scene.sessions[segment];
+  if (!session) return { kind: "none" };
   void x;
-  return scene.hostFilter === host.name ? { kind: "clear-filter" } : { kind: "host", host: host.name };
+  return scene.sessionFilter === session.name ? { kind: "clear-filter" } : { kind: "session", session: session.name };
 }
 
-export function emptyTotals(): Record<Session["state"], number> {
+export function emptyTotals(): Record<Pane["state"], number> {
   return { blocked: 0, done: 0, working: 0, idle: 0, unknown: 0 };
 }
 
-export function totalsOf(keys: Session[]): Record<Session["state"], number> {
+export function totalsOf(keys: Pane[]): Record<Pane["state"], number> {
   const t = emptyTotals();
   for (const s of keys) t[s.state] += 1;
   return t;
 }
 
-export type { HostStatus };
+export type { SessionStatus };

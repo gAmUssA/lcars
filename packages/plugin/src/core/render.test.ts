@@ -6,7 +6,7 @@ function decode(uri: string): string {
   return decodeURIComponent(uri.slice("data:image/svg+xml,".length));
 }
 
-const base = { label: "lcars", status: "working" as const, agent: "claude", host: null, live: true };
+const base = { label: "lcars", status: "working" as const, agent: "claude", session: null, live: true };
 
 test("paints the status colour, glyph and escaped label", () => {
   const svg = decode(renderKeySvg({ ...base, label: "a&b", status: "blocked" }));
@@ -49,8 +49,8 @@ test("status glyph sits in the top-left corner, title under the logo", () => {
   expect(svg).toContain('y="106"');
 });
 
-test("host tag appears only when given", () => {
-  expect(decode(renderKeySvg({ ...base, host: "Mini" }))).toContain(">Mini<");
+test("session tag appears only when given", () => {
+  expect(decode(renderKeySvg({ ...base, session: "Mini" }))).toContain(">Mini<");
   expect(decode(renderKeySvg(base))).not.toContain('text-anchor="end"');
 });
 

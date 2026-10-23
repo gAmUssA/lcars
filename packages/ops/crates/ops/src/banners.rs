@@ -1,13 +1,13 @@
-//! Desktop banners when an agent blocks or finishes a turn, on any host.
+//! Desktop banners when an agent blocks or finishes a turn, on any session.
 //!
 //! Close to the plugin's done ping (`core/transitions.ts`,
 //! `core/ping-baseline.ts`): entering `blocked`, or `working` → `done`. Unlike
 //! the ping, `working` → `idle` does not ring: Herdr reports `idle` for a turn
 //! that finished in the pane you are looking at, and a banner for that is noise.
-//! A host's first frame with sessions after it (re)connects is a backlog and
+//! A session's first frame with panes after it (re)connects is a backlog and
 //! only primes the baseline. Banners go through `alerter`; a click focuses the
 //! pane through the action relay and reveals its iTerm session, so a banner
-//! for a remote agent works from the deck host. See ADR 0002.
+//! for a remote agent works from the deck session. See ADR 0002.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -17,7 +17,7 @@ use tracing::{info, warn};
 
 use crate::actions::ActionRelay;
 use crate::config::{expand_tilde, BannersConfig};
-use crate::model::{AgentState, Session};
+use crate::model::{AgentState, Pane};
 use crate::reveal::Revealer;
 use crate::server::{FleetRx, FleetView};
 
@@ -29,13 +29,13 @@ pub enum FlipKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Flip {
-    pub session: Session,
+    pub pane: Pane,
     pub kind: FlipKind,
 }
 
-/// Sessions that entered `blocked` or finished a turn between two lists. A
-/// session not seen before counts only if it is blocked.
-pub fn detect_flips(prev: &[Session], next: &[Session]) -> Vec<Flip> {
+/// Panes that entered `blocked` or finished a turn between two lists. A
+/// pane not seen before counts only if it is blocked.
+pub fn detect_flips(prev: &[Pane], next: &[Pane]) -> Vec<Flip> {
     let before: HashMap<&str, AgentState> = prev.iter().map(|s| (s.id.as_str(), s.state)).collect();
     next.iter()
         .filter_map(|s| {
@@ -46,7 +46,7 @@ pub fn detect_flips(prev: &[Session], next: &[Session]) -> Vec<Flip> {
                 _ => return None,
             };
             Some(Flip {
-                session: s.clone(),
+                pane: s.clone(),
                 kind,
             })
         })
@@ -56,42 +56,45 @@ pub fn detect_flips(prev: &[Session], next: &[Session]) -> Vec<Flip> {
 /// Consecutive views, folded so a reconnect backlog never rings.
 #[derive(Debug, Default)]
 pub struct Baseline {
-    previous: Option<Vec<Session>>,
+    previous: Option<Vec<Pane>>,
     seeded: HashSet<String>,
 }
 
 impl Baseline {
     pub fn advance(&mut self, view: &FleetView) -> Vec<Flip> {
-        // A host that dropped will deliver a backlog again when it returns.
-        for host in view.hosts.iter().filter(|h| !h.connected) {
-            self.seeded.remove(&host.name);
+        // A session that dropped will deliver a backlog again when it returns.
+        for session in view.sessions.iter().filter(|h| !h.connected) {
+            self.seeded.remove(&session.name);
         }
-        let has_sessions = |host: &str| view.sessions.iter().any(|s| s.host == host);
+        let has_panes = |session: &str| view.panes.iter().any(|s| s.session == session);
         let Some(mut previous) = self.previous.take() else {
-            for host in view.hosts.iter().filter(|h| h.connected) {
-                if has_sessions(&host.name) {
-                    self.seeded.insert(host.name.clone());
+            for session in view.sessions.iter().filter(|h| h.connected) {
+                if has_panes(&session.name) {
+                    self.seeded.insert(session.name.clone());
                 }
             }
-            self.previous = Some(view.sessions.clone());
+            self.previous = Some(view.panes.clone());
             return Vec::new();
         };
-        for host in view.hosts.iter() {
-            // Ops keeps a dropped host's last sessions; not a backlog until it is back.
-            if !host.connected || self.seeded.contains(&host.name) || !has_sessions(&host.name) {
+        for session in view.sessions.iter() {
+            // Ops keeps a dropped session's last panes; not a backlog until it is back.
+            if !session.connected
+                || self.seeded.contains(&session.name)
+                || !has_panes(&session.name)
+            {
                 continue;
             }
-            previous.retain(|s| s.host != host.name);
+            previous.retain(|s| s.session != session.name);
             previous.extend(
-                view.sessions
+                view.panes
                     .iter()
-                    .filter(|s| s.host == host.name)
+                    .filter(|s| s.session == session.name)
                     .cloned(),
             );
-            self.seeded.insert(host.name.clone());
+            self.seeded.insert(session.name.clone());
         }
-        let flips = detect_flips(&previous, &view.sessions);
-        self.previous = Some(view.sessions.clone());
+        let flips = detect_flips(&previous, &view.panes);
+        self.previous = Some(view.panes.clone());
         flips
     }
 }
@@ -108,7 +111,7 @@ pub struct Banner {
 }
 
 pub fn banner_for(flip: &Flip, multi_host: bool) -> Banner {
-    let s = &flip.session;
+    let s = &flip.pane;
     let label = s
         .name
         .clone()
@@ -123,7 +126,7 @@ pub fn banner_for(flip: &Flip, multi_host: bool) -> Banner {
         .unwrap_or(&s.workspace_id)
         .to_string();
     let subtitle = if multi_host {
-        format!("{project} · {}", s.host)
+        format!("{project} · {}", s.session)
     } else {
         project
     };
@@ -242,8 +245,8 @@ impl Notifier {
             let fleet = self.fleet.clone();
             let relay = self.relay.clone();
             let revealer = self.revealer.clone();
-            let session_id = flip.session.id.clone();
-            info!(session = %session_id, kind = ?flip.kind, "banner");
+            let target_id = flip.pane.id.clone();
+            info!(pane = %target_id, kind = ?flip.kind, "banner");
             tokio::spawn(async move {
                 let output = match tokio::process::Command::new(&alerter)
                     .args(&args)
@@ -259,56 +262,60 @@ impl Notifier {
                 if String::from_utf8_lossy(&output.stdout).trim() != "@CONTENTCLICKED" {
                     return;
                 }
-                if let Err(err) = open(&fleet, &relay, &revealer, &session_id).await {
-                    warn!(session = %session_id, error = %format!("{err:#}"), "banner click failed");
+                if let Err(err) = open(&fleet, &relay, &revealer, &target_id).await {
+                    warn!(pane = %target_id, error = %format!("{err:#}"), "banner click failed");
                 }
             });
         }
     }
 }
 
-/// A banner click: focus the pane on its host, then put it on screen.
+/// A banner click: focus the pane on its session, then put it on screen.
 async fn open(
     fleet: &FleetRx,
     relay: &ActionRelay,
     revealer: &Revealer,
-    session_id: &str,
+    target_id: &str,
 ) -> anyhow::Result<()> {
-    let session = {
+    let pane = {
         let view = fleet.borrow();
-        let session = view.sessions.iter().find(|s| s.id == session_id).cloned();
-        if let Some(s) = &session {
-            if !view.hosts.iter().any(|h| h.name == s.host && h.connected) {
-                anyhow::bail!("host `{}` is disconnected", s.host);
+        let pane = view.panes.iter().find(|s| s.id == target_id).cloned();
+        if let Some(s) = &pane {
+            if !view
+                .sessions
+                .iter()
+                .any(|h| h.name == s.session && h.connected)
+            {
+                anyhow::bail!("session `{}` is disconnected", s.session);
             }
         }
-        session
+        pane
     };
-    let Some(session) = session else {
-        anyhow::bail!("{session_id} is gone");
+    let Some(pane) = pane else {
+        anyhow::bail!("{target_id} is gone");
     };
-    relay.focus(&session).await?;
-    if !revealer.reveal(&session.host).await? {
-        // Remote host or no attached iTerm client: raise the app. `open -a`
+    relay.focus(&pane).await?;
+    if !revealer.reveal(&pane.session).await? {
+        // Remote session or no attached iTerm client: raise the app. `open -a`
         // needs no Automation consent.
         tokio::process::Command::new("/usr/bin/open")
             .args(["-a", "iTerm"])
             .status()
             .await?;
     }
-    info!(session = %session_id, "banner click focused");
+    info!(pane = %target_id, "banner click focused");
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::HostStatus;
+    use crate::model::SessionStatus;
 
-    fn session(host: &str, pane: &str, state: AgentState) -> Session {
-        Session {
-            id: Session::id_for(host, pane),
-            host: host.into(),
+    fn pane(session: &str, pane: &str, state: AgentState) -> Pane {
+        Pane {
+            id: Pane::id_for(session, pane),
+            session: session.into(),
             workspace_id: "w1".into(),
             tab_id: "w1:t1".into(),
             pane_id: pane.into(),
@@ -326,9 +333,10 @@ mod tests {
         }
     }
 
-    fn host(name: &str, connected: bool) -> HostStatus {
-        HostStatus {
+    fn session(name: &str, connected: bool) -> SessionStatus {
+        SessionStatus {
             name: name.into(),
+            machine: None,
             local: true,
             connected,
             version: None,
@@ -338,10 +346,11 @@ mod tests {
         }
     }
 
-    fn view(hosts: Vec<HostStatus>, sessions: Vec<Session>) -> FleetView {
+    fn view(sessions: Vec<SessionStatus>, panes: Vec<Pane>) -> FleetView {
         FleetView {
-            hosts,
+            api: crate::server::API_VERSION,
             sessions,
+            panes,
             workspaces: vec![],
         }
     }
@@ -349,25 +358,25 @@ mod tests {
     #[test]
     fn flips_on_entering_blocked_and_finishing_a_turn() {
         let prev = vec![
-            session("a", "p1", AgentState::Working),
-            session("a", "p2", AgentState::Working),
-            session("a", "p3", AgentState::Blocked),
-            session("a", "p4", AgentState::Idle),
-            session("a", "p7", AgentState::Working),
+            pane("a", "p1", AgentState::Working),
+            pane("a", "p2", AgentState::Working),
+            pane("a", "p3", AgentState::Blocked),
+            pane("a", "p4", AgentState::Idle),
+            pane("a", "p7", AgentState::Working),
         ];
         let next = vec![
-            session("a", "p1", AgentState::Blocked),
-            session("a", "p2", AgentState::Done),
-            session("a", "p3", AgentState::Blocked),
-            session("a", "p4", AgentState::Idle),
-            session("a", "p5", AgentState::Idle),
-            session("a", "p6", AgentState::Blocked),
+            pane("a", "p1", AgentState::Blocked),
+            pane("a", "p2", AgentState::Done),
+            pane("a", "p3", AgentState::Blocked),
+            pane("a", "p4", AgentState::Idle),
+            pane("a", "p5", AgentState::Idle),
+            pane("a", "p6", AgentState::Blocked),
             // Finished in the pane you are watching: Herdr says idle, not done.
-            session("a", "p7", AgentState::Idle),
+            pane("a", "p7", AgentState::Idle),
         ];
         let flips: Vec<_> = detect_flips(&prev, &next)
             .into_iter()
-            .map(|f| (f.session.pane_id, f.kind))
+            .map(|f| (f.pane.pane_id, f.kind))
             .collect();
         assert_eq!(
             flips,
@@ -382,25 +391,28 @@ mod tests {
     #[test]
     fn first_view_and_reconnect_backlog_only_prime() {
         let mut baseline = Baseline::default();
-        let blocked = session("a", "p1", AgentState::Blocked);
+        let blocked = pane("a", "p1", AgentState::Blocked);
         assert!(baseline
-            .advance(&view(vec![host("a", true)], vec![blocked.clone()]))
+            .advance(&view(vec![session("a", true)], vec![blocked.clone()]))
             .is_empty());
-        // Host drops and comes back with a different backlog: still silent.
-        baseline.advance(&view(vec![host("a", false)], vec![blocked.clone()]));
-        let backlog = session("a", "p2", AgentState::Blocked);
+        // Session drops and comes back with a different backlog: still silent.
+        baseline.advance(&view(vec![session("a", false)], vec![blocked.clone()]));
+        let backlog = pane("a", "p2", AgentState::Blocked);
         assert!(baseline
             .advance(&view(
-                vec![host("a", true)],
+                vec![session("a", true)],
                 vec![blocked.clone(), backlog.clone()]
             ))
             .is_empty());
         // After that, a real flip rings.
-        let working = session("a", "p3", AgentState::Working);
-        baseline.advance(&view(vec![host("a", true)], vec![blocked.clone(), working]));
+        let working = pane("a", "p3", AgentState::Working);
+        baseline.advance(&view(
+            vec![session("a", true)],
+            vec![blocked.clone(), working],
+        ));
         let flips = baseline.advance(&view(
-            vec![host("a", true)],
-            vec![blocked, session("a", "p3", AgentState::Done)],
+            vec![session("a", true)],
+            vec![blocked, pane("a", "p3", AgentState::Done)],
         ));
         assert_eq!(flips.len(), 1);
         assert_eq!(flips[0].kind, FlipKind::Done);
@@ -409,22 +421,22 @@ mod tests {
     #[test]
     fn host_connecting_late_is_a_backlog_not_news() {
         let mut baseline = Baseline::default();
-        baseline.advance(&view(vec![host("a", true), host("b", true)], vec![]));
+        baseline.advance(&view(vec![session("a", true), session("b", true)], vec![]));
         let flips = baseline.advance(&view(
-            vec![host("a", true), host("b", true)],
-            vec![session("b", "p1", AgentState::Blocked)],
+            vec![session("a", true), session("b", true)],
+            vec![pane("b", "p1", AgentState::Blocked)],
         ));
         assert!(flips.is_empty());
     }
 
     #[test]
     fn banner_names_agent_project_host_and_question() {
-        let mut s = session("mini", "p1", AgentState::Blocked);
+        let mut s = pane("mini", "p1", AgentState::Blocked);
         s.name = Some("reviewer".into());
         s.pending_prompt = Some("Allow edit to main.rs?".into());
         let banner = banner_for(
             &Flip {
-                session: s.clone(),
+                pane: s.clone(),
                 kind: FlipKind::Blocked,
             },
             true,
@@ -438,7 +450,7 @@ mod tests {
         s.cwd = None;
         let done = banner_for(
             &Flip {
-                session: s,
+                pane: s,
                 kind: FlipKind::Done,
             },
             false,

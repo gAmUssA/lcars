@@ -11,7 +11,7 @@ import streamDeck, {
   type WillDisappearEvent,
 } from "@elgato/streamdeck";
 import type { FleetStore } from "../core/store";
-import { hostTag, labelFor, type DisplayMode } from "../core/labels";
+import { sessionTag, labelFor, type DisplayMode } from "../core/labels";
 import { renderKeySvg, renderOfflineSvg } from "../core/render";
 import type { OpsActions } from "../ops/actions";
 import type { TerminalActivator } from "../os/terminal";
@@ -38,8 +38,8 @@ export function slotConfig(settings: InboxSettings): SlotConfig {
   };
 }
 
-function sessionFor(store: FleetStore, config: SlotConfig) {
-  return config.layout === "wall" ? store.sessionAtAbsolute(config.slot) : store.sessionAt(config.slot);
+function paneFor(store: FleetStore, config: SlotConfig) {
+  return config.layout === "wall" ? store.paneAtAbsolute(config.slot) : store.paneAt(config.slot);
 }
 
 export const INBOX_KEY_UUID = "io.gamov.lcars.inbox";
@@ -51,7 +51,7 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
   readonly #configs = new Map<string, SlotConfig>();
   // What was under the finger when it went down: the deck can reorder
   // during a hold, and Conn must confirm the agent the operator saw.
-  readonly #press = new Map<string, { at: number; sessionId: string | null }>();
+  readonly #press = new Map<string, { at: number; paneId: string | null }>();
 
   constructor(
     private readonly store: FleetStore,
@@ -78,33 +78,33 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
   }
 
   override onKeyDown(ev: KeyDownEvent<InboxSettings>): void {
-    const shown = sessionFor(this.store, slotConfig(ev.payload.settings));
-    this.#press.set(ev.action.id, { at: this.now(), sessionId: shown?.id ?? null });
+    const shown = paneFor(this.store, slotConfig(ev.payload.settings));
+    this.#press.set(ev.action.id, { at: this.now(), paneId: shown?.id ?? null });
   }
 
   override async onKeyUp(ev: KeyUpEvent<InboxSettings>): Promise<void> {
     const press = this.#press.get(ev.action.id);
     this.#press.delete(ev.action.id);
-    const session = this.resolvePress(press?.sessionId ?? null);
-    if (!session) {
-      if (press?.sessionId) await ev.action.showAlert(); // it moved or vanished during the hold
+    const pane = this.resolvePress(press?.paneId ?? null);
+    if (!pane) {
+      if (press?.paneId) await ev.action.showAlert(); // it moved or vanished during the hold
       return;
     }
     const start = press?.at;
     const longPress = start !== undefined && this.now() - start >= LONG_PRESS_MS;
     if (longPress) {
-      await this.conn(session, ev.action);
+      await this.conn(pane, ev.action);
       return;
     }
     let revealed: boolean;
     try {
-      revealed = await this.ops.focus(session.id);
+      revealed = await this.ops.focus(pane.id);
     } catch (e) {
-      streamDeck.logger.error(`focus ${session.id} failed: ${String(e)}`);
+      streamDeck.logger.error(`focus ${pane.id} failed: ${String(e)}`);
       await ev.action.showAlert();
       return;
     }
-    // Ops already put the pane's iTerm session on screen (local host).
+    // Ops already put the pane's iTerm session on screen (local session).
     if (revealed) return;
     // Otherwise raise the terminal so the focused pane is on screen; a raise
     // failure must not mask the successful focus.
@@ -115,36 +115,36 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
     }
   }
 
-  /** The session pressed at key down, looked up again now; null if it is gone. */
-  resolvePress(sessionId: string | null) {
-    if (!sessionId) return null;
-    return this.store.allKeys().find((s) => s.id === sessionId) ?? null;
+  /** The pane pressed at key down, looked up again now; null if it is gone. */
+  resolvePress(paneId: string | null) {
+    if (!paneId) return null;
+    return this.store.allKeys().find((s) => s.id === paneId) ?? null;
   }
 
   /** Conn: confirm a blocked agent's dialog. Anything else is a refused hold. */
-  async conn(session: { id: string; state: string }, action: { showAlert(): Promise<void>; showOk(): Promise<void> }): Promise<void> {
-    if (session.state !== "blocked") {
-      streamDeck.logger.info(`conn on ${session.id} ignored: state is ${session.state}, not blocked`);
+  async conn(pane: { id: string; state: string }, action: { showAlert(): Promise<void>; showOk(): Promise<void> }): Promise<void> {
+    if (pane.state !== "blocked") {
+      streamDeck.logger.info(`conn on ${pane.id} ignored: state is ${pane.state}, not blocked`);
       await action.showAlert();
       return;
     }
     try {
-      await this.ops.sendKeys(session.id, CONN_KEYS);
-      streamDeck.logger.info(`conn: confirmed ${session.id}`);
+      await this.ops.sendKeys(pane.id, CONN_KEYS);
+      streamDeck.logger.info(`conn: confirmed ${pane.id}`);
       await action.showOk();
     } catch (e) {
-      streamDeck.logger.error(`conn on ${session.id} failed: ${String(e)}`);
+      streamDeck.logger.error(`conn on ${pane.id} failed: ${String(e)}`);
       await action.showAlert();
     }
   }
 
-  /** Blink the key that currently shows `sessionId`, if any. */
-  flash(sessionId: string): void {
+  /** Blink the key that currently shows `paneId`, if any. */
+  flash(paneId: string): void {
     this.actions.forEach((a) => {
       if (!a.isKey()) return;
       const config = this.#configs.get(a.id);
       if (!config) return;
-      if (sessionFor(this.store, config)?.id === sessionId) void a.showAlert();
+      if (paneFor(this.store, config)?.id === paneId) void a.showAlert();
     });
   }
 
@@ -159,19 +159,19 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
         void a.setImage(renderOfflineSvg());
         return;
       }
-      const session = sessionFor(this.store, config);
-      const hostUp = session ? state.view?.hosts.find((h) => h.name === session.host)?.connected !== false : true;
+      const pane = paneFor(this.store, config);
+      const sessionUp = pane ? state.view?.sessions.find((h) => h.name === pane.session)?.connected !== false : true;
       void a.setImage(
         renderKeySvg(
-          session
+          pane
             ? {
-                label: labelFor(session, state.keys, config.display),
-                status: session.state,
-                agent: session.agent ?? "shell",
-                host: hostTag(session, state.view),
-                // Dim when Ops is gone or when this session's host is: both
+                label: labelFor(pane, state.keys, config.display),
+                status: pane.state,
+                agent: pane.agent ?? "shell",
+                session: sessionTag(pane, state.view),
+                // Dim when Ops is gone or when this pane's session is: both
                 // mean the colour is a memory, not a reading.
-                live: state.healthy && hostUp,
+                live: state.healthy && sessionUp,
               }
             : null,
         ),

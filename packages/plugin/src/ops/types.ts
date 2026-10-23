@@ -2,10 +2,10 @@
 
 export type AgentState = "working" | "blocked" | "done" | "idle" | "unknown";
 
-export type Session = {
-  /** `<host>/<pane_id>`, unique across the fleet. */
+export type Pane = {
+  /** `<session>/<pane_id>`, unique across the fleet. */
   id: string;
-  host: string;
+  session: string;
   workspace_id: string;
   tab_id: string;
   pane_id: string;
@@ -24,9 +24,12 @@ export type Session = {
   pending_prompt: string | null;
 };
 
-export type HostStatus = {
+/** One Herdr session: one Herdr server, local or on a `machine` over SSH. */
+export type SessionStatus = {
   name: string;
-  /** The host whose Herdr runs on this machine (the deck's own host). */
+  /** SSH alias of the machine the session runs on; null on the deck's own machine. */
+  machine: string | null;
+  /** The session's Herdr runs on this machine. */
   local: boolean;
   connected: boolean;
   version: string | null;
@@ -36,9 +39,9 @@ export type HostStatus = {
 };
 
 export type Workspace = {
-  /** `<host>/<workspace_id>`. */
+  /** `<session>/<workspace_id>`. */
   id: string;
-  host: string;
+  session: string;
   workspace_id: string;
   number: number;
   label: string;
@@ -48,7 +51,10 @@ export type Workspace = {
   state: AgentState;
 };
 
-export type FleetView = { hosts: HostStatus[]; sessions: Session[]; workspaces: Workspace[] };
+/** `FleetView` shape this plugin reads; Ops's `API_VERSION`. */
+export const API_VERSION = 2;
+
+export type FleetView = { sessions: SessionStatus[]; panes: Pane[]; workspaces: Workspace[] };
 
 const STATES: ReadonlySet<string> = new Set(["working", "blocked", "done", "idle", "unknown"]);
 
@@ -63,13 +69,20 @@ function str(value: unknown): string | null {
 /** Parse one Ops message. Throws when the shape is not a FleetView. */
 export function parseFleetView(text: string): FleetView {
   const raw: unknown = JSON.parse(text);
-  if (!isRecord(raw) || !Array.isArray(raw.hosts) || !Array.isArray(raw.sessions)) {
-    throw new Error("Ops message is not a FleetView (expected hosts[] and sessions[])");
+  if (!isRecord(raw)) throw new Error("Ops message is not a FleetView (expected an object)");
+  if (raw.api !== API_VERSION) {
+    throw new Error(
+      `Ops speaks FleetView api ${JSON.stringify(raw.api ?? 1)}, this plugin reads api ${API_VERSION}: install Ops and the plugin from the same release`,
+    );
   }
-  const hosts: HostStatus[] = raw.hosts.map((h: unknown, i: number) => {
-    if (!isRecord(h) || typeof h.name !== "string") throw new Error(`hosts[${i}] has no name`);
+  if (!Array.isArray(raw.sessions) || !Array.isArray(raw.panes)) {
+    throw new Error("Ops message is not a FleetView (expected sessions[] and panes[])");
+  }
+  const sessions: SessionStatus[] = raw.sessions.map((h: unknown, i: number) => {
+    if (!isRecord(h) || typeof h.name !== "string") throw new Error(`sessions[${i}] has no name`);
     return {
       name: h.name,
+      machine: str(h.machine),
       local: h.local === true,
       connected: h.connected === true,
       version: str(h.version),
@@ -78,14 +91,14 @@ export function parseFleetView(text: string): FleetView {
       updated_at_ms: typeof h.updated_at_ms === "number" ? h.updated_at_ms : 0,
     };
   });
-  const sessions: Session[] = raw.sessions.map((s: unknown, i: number) => {
-    if (!isRecord(s) || typeof s.id !== "string" || typeof s.host !== "string" || typeof s.pane_id !== "string") {
-      throw new Error(`sessions[${i}] lacks id/host/pane_id`);
+  const panes: Pane[] = raw.panes.map((s: unknown, i: number) => {
+    if (!isRecord(s) || typeof s.id !== "string" || typeof s.session !== "string" || typeof s.pane_id !== "string") {
+      throw new Error(`panes[${i}] lacks id/session/pane_id`);
     }
     const state = typeof s.state === "string" && STATES.has(s.state) ? (s.state as AgentState) : "unknown";
     return {
       id: s.id,
-      host: s.host,
+      session: s.session,
       workspace_id: str(s.workspace_id) ?? "",
       tab_id: str(s.tab_id) ?? "",
       pane_id: s.pane_id,
@@ -103,12 +116,12 @@ export function parseFleetView(text: string): FleetView {
     };
   });
   const workspaces: Workspace[] = (Array.isArray(raw.workspaces) ? raw.workspaces : []).map((w: unknown, i: number) => {
-    if (!isRecord(w) || typeof w.id !== "string" || typeof w.host !== "string" || typeof w.workspace_id !== "string") {
-      throw new Error(`workspaces[${i}] lacks id/host/workspace_id`);
+    if (!isRecord(w) || typeof w.id !== "string" || typeof w.session !== "string" || typeof w.workspace_id !== "string") {
+      throw new Error(`workspaces[${i}] lacks id/session/workspace_id`);
     }
     return {
       id: w.id,
-      host: w.host,
+      session: w.session,
       workspace_id: w.workspace_id,
       number: typeof w.number === "number" ? w.number : 0,
       label: str(w.label) ?? w.workspace_id,
@@ -117,5 +130,5 @@ export function parseFleetView(text: string): FleetView {
       state: typeof w.state === "string" && STATES.has(w.state) ? (w.state as AgentState) : "unknown",
     };
   });
-  return { hosts, sessions, workspaces };
+  return { sessions, panes, workspaces };
 }

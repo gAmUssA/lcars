@@ -1,5 +1,5 @@
-//! The normalised session model Ops serves to the plugin, and the merge
-//! logic that folds per-host Herdr events into it.
+//! The normalised pane model Ops serves to the plugin, and the merge
+//! logic that folds per-session Herdr events into it.
 
 use std::collections::BTreeMap;
 
@@ -46,12 +46,12 @@ impl AgentState {
     }
 }
 
-/// One Herdr pane on one host.
+/// One Herdr pane on one session.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Session {
-    /// `<host>/<pane_id>`, unique across the fleet.
+pub struct Pane {
+    /// `<session>/<pane_id>`, unique across the fleet.
     pub id: String,
-    pub host: String,
+    pub session: String,
     pub workspace_id: String,
     pub tab_id: String,
     pub pane_id: String,
@@ -67,11 +67,11 @@ pub struct Session {
     /// From Herdr's `tokens.summary`: the agent's one-line summary of its last prompt.
     pub summary: Option<String>,
     pub focused: bool,
-    /// Herdr's `state_change_seq`; monotonic per host.
+    /// Herdr's `state_change_seq`; monotonic per session.
     pub seq: u64,
     pub updated_at_ms: u64,
     /// The question a blocked agent is asking, read from its screen; `None`
-    /// unless the session is blocked and the dialog text was recognised.
+    /// unless the pane is blocked and the dialog text was recognised.
     #[serde(default)]
     pub pending_prompt: Option<String>,
 }
@@ -108,15 +108,15 @@ pub fn extract_prompt(screen: &str) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
-impl Session {
-    pub fn id_for(host: &str, pane_id: &str) -> String {
-        format!("{host}/{pane_id}")
+impl Pane {
+    pub fn id_for(session: &str, pane_id: &str) -> String {
+        format!("{session}/{pane_id}")
     }
 
-    fn from_pane(host: &str, pane: &PaneInfo, now_ms: u64) -> Self {
-        Session {
-            id: Session::id_for(host, &pane.pane_id),
-            host: host.to_string(),
+    fn from_pane(session: &str, pane: &PaneInfo, now_ms: u64) -> Self {
+        Pane {
+            id: Pane::id_for(session, &pane.pane_id),
+            session: session.to_string(),
             workspace_id: pane.workspace_id.clone(),
             tab_id: pane.tab_id.clone(),
             pane_id: pane.pane_id.clone(),
@@ -150,12 +150,12 @@ impl Session {
     }
 }
 
-/// One Herdr workspace on one host, for the workspace keys.
+/// One Herdr workspace on one session, for the workspace keys.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Workspace {
-    /// `<host>/<workspace_id>`.
+    /// `<session>/<workspace_id>`.
     pub id: String,
-    pub host: String,
+    pub session: String,
     pub workspace_id: String,
     /// Herdr's 1-based ordinal, the order the TUI shows.
     pub number: usize,
@@ -167,10 +167,13 @@ pub struct Workspace {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct HostStatus {
+pub struct SessionStatus {
     pub name: String,
-    /// True for the host whose Herdr socket is on this machine: the deck's
-    /// own host, which pane-level dials prefer.
+    /// SSH alias of the machine the session runs on; `None` on this machine.
+    #[serde(default)]
+    pub machine: Option<String>,
+    /// True for the session whose Herdr socket is on this machine: the deck's
+    /// own session, which pane-level dials prefer.
     pub local: bool,
     pub connected: bool,
     pub version: Option<String>,
@@ -180,9 +183,9 @@ pub struct HostStatus {
     pub updated_at_ms: u64,
 }
 
-/// What one host's Herdr connection reports to the merge.
+/// What one session's Herdr connection reports to the merge.
 #[derive(Debug, Clone, PartialEq)]
-pub enum HostEvent {
+pub enum SessionEvent {
     Connected {
         version: String,
         protocol: u32,
@@ -190,7 +193,7 @@ pub enum HostEvent {
     Disconnected {
         error: String,
     },
-    /// Full state after connect. Replaces every session for the host.
+    /// Full state after connect. Replaces every pane for the session.
     Snapshot {
         panes: Vec<PaneInfo>,
         agents: Vec<AgentInfo>,
@@ -220,7 +223,7 @@ pub enum HostEvent {
         pane_id: String,
         prompt: Option<String>,
     },
-    /// The host's workspace list, from a snapshot. Replaces the host's set.
+    /// The session's workspace list, from a snapshot. Replaces the session's set.
     Workspaces(Vec<WorkspaceInfo>),
     /// A workspace was created, closed, renamed or focused; the client
     /// answers with a fresh snapshot, the merge needs nothing.
@@ -241,23 +244,31 @@ pub fn derive_state(agent: &AgentInfo) -> AgentState {
     }
 }
 
-/// Merged state across hosts. Cheap to clone; published as a whole.
+/// Merged state across sessions. Cheap to clone; published as a whole.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Fleet {
-    pub hosts: BTreeMap<String, HostStatus>,
-    pub sessions: BTreeMap<String, Session>,
+    pub sessions: BTreeMap<String, SessionStatus>,
+    pub panes: BTreeMap<String, Pane>,
     #[serde(default)]
     pub workspaces: BTreeMap<String, Workspace>,
 }
 
 impl Fleet {
-    pub fn with_hosts<'a>(hosts: impl IntoIterator<Item = (&'a str, bool)>, now_ms: u64) -> Self {
+    /// One entry per configured session: its name and, for a remote
+    /// session, the machine it runs on.
+    pub fn with_sessions<'a>(
+        sessions: impl IntoIterator<Item = (&'a str, Option<&'a str>)>,
+        now_ms: u64,
+    ) -> Self {
         let mut fleet = Fleet::default();
-        for (name, local) in hosts {
-            fleet.hosts.insert(
+        for (name, machine) in sessions {
+            let local = machine.is_none();
+            let machine = machine.map(str::to_string);
+            fleet.sessions.insert(
                 name.to_string(),
-                HostStatus {
+                SessionStatus {
                     name: name.to_string(),
+                    machine,
                     local,
                     connected: false,
                     version: None,
@@ -270,11 +281,11 @@ impl Fleet {
         fleet
     }
 
-    /// Fold one host event in. Returns `true` when anything changed.
-    pub fn apply(&mut self, host: &str, event: HostEvent, now_ms: u64) -> bool {
+    /// Fold one session event in. Returns `true` when anything changed.
+    pub fn apply(&mut self, session: &str, event: SessionEvent, now_ms: u64) -> bool {
         match event {
-            HostEvent::Connected { version, protocol } => {
-                let status = self.host_mut(host, now_ms);
+            SessionEvent::Connected { version, protocol } => {
+                let status = self.session_mut(session, now_ms);
                 let changed = !status.connected
                     || status.version.as_deref() != Some(&version)
                     || status.protocol != Some(protocol)
@@ -288,8 +299,8 @@ impl Fleet {
                 }
                 changed
             }
-            HostEvent::Disconnected { error } => {
-                let status = self.host_mut(host, now_ms);
+            SessionEvent::Disconnected { error } => {
+                let status = self.session_mut(session, now_ms);
                 let changed = status.connected || status.error.as_deref() != Some(&error);
                 status.connected = false;
                 status.error = Some(error);
@@ -298,31 +309,28 @@ impl Fleet {
                 }
                 changed
             }
-            HostEvent::Snapshot { panes, agents } => {
-                let before: Vec<Session> = self.sessions_for(host).cloned().collect();
-                self.sessions.retain(|_, s| s.host != host);
+            SessionEvent::Snapshot { panes, agents } => {
+                let before: Vec<Pane> = self.panes_for(session).cloned().collect();
+                self.panes.retain(|_, s| s.session != session);
                 for pane in &panes {
-                    let session = Session::from_pane(host, pane, now_ms);
-                    self.sessions.insert(session.id.clone(), session);
+                    let pane = Pane::from_pane(session, pane, now_ms);
+                    self.panes.insert(pane.id.clone(), pane);
                 }
                 for agent in &agents {
-                    if let Some(session) = self
-                        .sessions
-                        .get_mut(&Session::id_for(host, &agent.pane_id))
-                    {
-                        session.overlay_agent(agent);
-                        session.state = derive_state(agent);
-                        session.focused = agent.focused;
+                    if let Some(pane) = self.panes.get_mut(&Pane::id_for(session, &agent.pane_id)) {
+                        pane.overlay_agent(agent);
+                        pane.state = derive_state(agent);
+                        pane.focused = agent.focused;
                     }
                 }
-                let after: Vec<Session> = self.sessions_for(host).cloned().collect();
+                let after: Vec<Pane> = self.panes_for(session).cloned().collect();
                 !same_ignoring_time(&before, &after)
             }
-            HostEvent::StatusChanged(event) => {
-                let id = Session::id_for(host, &event.pane_id);
-                let session = self.sessions.entry(id.clone()).or_insert_with(|| Session {
+            SessionEvent::StatusChanged(event) => {
+                let id = Pane::id_for(session, &event.pane_id);
+                let pane = self.panes.entry(id.clone()).or_insert_with(|| Pane {
                     id,
-                    host: host.to_string(),
+                    session: session.to_string(),
                     workspace_id: event.workspace_id.clone(),
                     tab_id: String::new(),
                     pane_id: event.pane_id.clone(),
@@ -341,94 +349,94 @@ impl Fleet {
                 let new_state: AgentState = event.agent_status.into();
                 // A finished turn stays `done` through a repeated idle event;
                 // only focus or a fresh agent.get decides otherwise.
-                let keep_done = session.state == AgentState::Done && new_state == AgentState::Idle;
-                let mut changed = !keep_done && session.state != new_state;
+                let keep_done = pane.state == AgentState::Done && new_state == AgentState::Idle;
+                let mut changed = !keep_done && pane.state != new_state;
                 if !keep_done {
-                    session.state = new_state;
+                    pane.state = new_state;
                 }
-                if new_state != AgentState::Blocked && session.pending_prompt.is_some() {
-                    session.pending_prompt = None;
+                if new_state != AgentState::Blocked && pane.pending_prompt.is_some() {
+                    pane.pending_prompt = None;
                     changed = true;
                 }
-                if event.agent.is_some() && session.agent != event.agent {
-                    session.agent = event.agent.clone();
+                if event.agent.is_some() && pane.agent != event.agent {
+                    pane.agent = event.agent.clone();
                     changed = true;
                 }
-                if event.title.is_some() && session.title != event.title {
-                    session.title = event.title.clone();
+                if event.title.is_some() && pane.title != event.title {
+                    pane.title = event.title.clone();
                     changed = true;
                 }
                 if changed {
-                    session.updated_at_ms = now_ms;
+                    pane.updated_at_ms = now_ms;
                 }
                 changed
             }
-            HostEvent::PaneCreated(pane) => {
-                let session = Session::from_pane(host, pane.as_ref(), now_ms);
-                let previous = self.sessions.insert(session.id.clone(), session.clone());
-                previous.as_ref() != Some(&session)
+            SessionEvent::PaneCreated(pane) => {
+                let pane = Pane::from_pane(session, pane.as_ref(), now_ms);
+                let previous = self.panes.insert(pane.id.clone(), pane.clone());
+                previous.as_ref() != Some(&pane)
             }
-            HostEvent::PaneClosed { pane_id } => self
-                .sessions
-                .remove(&Session::id_for(host, &pane_id))
+            SessionEvent::PaneClosed { pane_id } => self
+                .panes
+                .remove(&Pane::id_for(session, &pane_id))
                 .is_some(),
-            HostEvent::AgentDetected {
+            SessionEvent::AgentDetected {
                 pane_id,
                 agent,
                 released,
             } => {
-                let Some(session) = self.sessions.get_mut(&Session::id_for(host, &pane_id)) else {
+                let Some(pane) = self.panes.get_mut(&Pane::id_for(session, &pane_id)) else {
                     return false;
                 };
                 let next = if released {
                     None
                 } else {
-                    agent.or(session.agent.clone())
+                    agent.or(pane.agent.clone())
                 };
-                if session.agent == next {
+                if pane.agent == next {
                     return false;
                 }
-                session.agent = next;
+                pane.agent = next;
                 if released {
-                    session.name = None;
-                    session.state = AgentState::Unknown;
+                    pane.name = None;
+                    pane.state = AgentState::Unknown;
                 }
-                session.updated_at_ms = now_ms;
+                pane.updated_at_ms = now_ms;
                 true
             }
-            HostEvent::PaneRefreshed(pane) => {
-                let fresh = Session::from_pane(host, pane.as_ref(), now_ms);
-                let Some(session) = self.sessions.get_mut(&fresh.id) else {
-                    self.sessions.insert(fresh.id.clone(), fresh);
+            SessionEvent::PaneRefreshed(pane) => {
+                let fresh = Pane::from_pane(session, pane.as_ref(), now_ms);
+                let Some(pane) = self.panes.get_mut(&fresh.id) else {
+                    self.panes.insert(fresh.id.clone(), fresh);
                     return true;
                 };
                 let mut merged = fresh;
-                merged.name = session.name.clone();
-                merged.seq = session.seq;
+                merged.name = pane.name.clone();
+                merged.seq = pane.seq;
                 if merged.state == AgentState::Blocked {
-                    merged.pending_prompt = session.pending_prompt.clone();
+                    merged.pending_prompt = pane.pending_prompt.clone();
                 }
                 // A derived `done` outlives a pane refresh; the pane view says idle.
-                if session.state == AgentState::Done && merged.state == AgentState::Idle {
+                if pane.state == AgentState::Done && merged.state == AgentState::Idle {
                     merged.state = AgentState::Done;
                 }
-                merged.updated_at_ms = session.updated_at_ms;
-                if *session == merged {
+                merged.updated_at_ms = pane.updated_at_ms;
+                if *pane == merged {
                     return false;
                 }
                 merged.updated_at_ms = now_ms;
-                *session = merged;
+                *pane = merged;
                 true
             }
-            HostEvent::AgentRefreshed(agent) => {
-                let id = Session::id_for(host, &agent.pane_id);
+            SessionEvent::AgentRefreshed(agent) => {
+                let id = Pane::id_for(session, &agent.pane_id);
                 let mut changed = false;
                 if agent.focused {
-                    // One focused pane per host.
+                    // One focused pane per session.
                     for other in self
-                        .sessions
+                        .panes
                         .values_mut()
-                        .filter(|s| s.host == host && s.id != id)
+                        .filter(|s| s.session == session && s.id != id)
                     {
                         if other.focused {
                             other.focused = false;
@@ -437,57 +445,57 @@ impl Fleet {
                         }
                     }
                 }
-                let Some(session) = self.sessions.get_mut(&id) else {
+                let Some(pane) = self.panes.get_mut(&id) else {
                     return changed;
                 };
-                let before = session.clone();
-                session.overlay_agent(agent.as_ref());
-                session.agent = agent.agent.clone().or(session.agent.clone());
-                session.state = derive_state(agent.as_ref());
-                session.focused = agent.focused;
+                let before = pane.clone();
+                pane.overlay_agent(agent.as_ref());
+                pane.agent = agent.agent.clone().or(pane.agent.clone());
+                pane.state = derive_state(agent.as_ref());
+                pane.focused = agent.focused;
                 if let Some(model) = agent.tokens.get("model") {
-                    session.model = Some(model.clone());
+                    pane.model = Some(model.clone());
                 }
                 if let Some(summary) = agent.tokens.get("summary") {
-                    session.summary = Some(summary.clone());
+                    pane.summary = Some(summary.clone());
                 }
                 if agent.terminal_title_stripped.is_some() {
-                    session.title = agent.terminal_title_stripped.clone();
+                    pane.title = agent.terminal_title_stripped.clone();
                 }
-                if *session == before {
+                if *pane == before {
                     return changed;
                 }
-                session.updated_at_ms = now_ms;
+                pane.updated_at_ms = now_ms;
                 true
             }
-            HostEvent::PromptRead { pane_id, prompt } => {
-                let Some(session) = self.sessions.get_mut(&Session::id_for(host, &pane_id)) else {
+            SessionEvent::PromptRead { pane_id, prompt } => {
+                let Some(pane) = self.panes.get_mut(&Pane::id_for(session, &pane_id)) else {
                     return false;
                 };
                 // The read raced a state change: an unblocked pane asks nothing.
-                if session.state != AgentState::Blocked || session.pending_prompt == prompt {
+                if pane.state != AgentState::Blocked || pane.pending_prompt == prompt {
                     return false;
                 }
-                session.pending_prompt = prompt;
-                session.updated_at_ms = now_ms;
+                pane.pending_prompt = prompt;
+                pane.updated_at_ms = now_ms;
                 true
             }
-            HostEvent::WorkspacesChanged => false,
-            HostEvent::Workspaces(list) => {
+            SessionEvent::WorkspacesChanged => false,
+            SessionEvent::Workspaces(list) => {
                 let before: Vec<Workspace> = self
                     .workspaces
                     .values()
-                    .filter(|w| w.host == host)
+                    .filter(|w| w.session == session)
                     .cloned()
                     .collect();
-                self.workspaces.retain(|_, w| w.host != host);
+                self.workspaces.retain(|_, w| w.session != session);
                 for info in &list {
-                    let id = format!("{host}/{}", info.workspace_id);
+                    let id = format!("{session}/{}", info.workspace_id);
                     self.workspaces.insert(
                         id.clone(),
                         Workspace {
                             id,
-                            host: host.to_string(),
+                            session: session.to_string(),
                             workspace_id: info.workspace_id.clone(),
                             number: info.number,
                             label: info.label.clone(),
@@ -500,26 +508,26 @@ impl Fleet {
                 let after: Vec<Workspace> = self
                     .workspaces
                     .values()
-                    .filter(|w| w.host == host)
+                    .filter(|w| w.session == session)
                     .cloned()
                     .collect();
                 before != after
             }
-            HostEvent::PaneFocused { pane_id } => {
+            SessionEvent::PaneFocused { pane_id } => {
                 let mut changed = false;
-                for session in self.sessions.values_mut().filter(|s| s.host == host) {
-                    let focused = session.pane_id == pane_id;
+                for pane in self.panes.values_mut().filter(|s| s.session == session) {
+                    let focused = pane.pane_id == pane_id;
                     let mut touched = false;
-                    if session.focused != focused {
-                        session.focused = focused;
+                    if pane.focused != focused {
+                        pane.focused = focused;
                         touched = true;
                     }
-                    if focused && session.state == AgentState::Done {
-                        session.state = AgentState::Idle;
+                    if focused && pane.state == AgentState::Done {
+                        pane.state = AgentState::Idle;
                         touched = true;
                     }
                     if touched {
-                        session.updated_at_ms = now_ms;
+                        pane.updated_at_ms = now_ms;
                         changed = true;
                     }
                 }
@@ -528,11 +536,12 @@ impl Fleet {
         }
     }
 
-    fn host_mut(&mut self, host: &str, now_ms: u64) -> &mut HostStatus {
-        self.hosts
-            .entry(host.to_string())
-            .or_insert_with(|| HostStatus {
-                name: host.to_string(),
+    fn session_mut(&mut self, session: &str, now_ms: u64) -> &mut SessionStatus {
+        self.sessions
+            .entry(session.to_string())
+            .or_insert_with(|| SessionStatus {
+                name: session.to_string(),
+                machine: None,
                 local: false,
                 connected: false,
                 version: None,
@@ -542,32 +551,36 @@ impl Fleet {
             })
     }
 
-    pub fn sessions_for<'a>(&'a self, host: &'a str) -> impl Iterator<Item = &'a Session> + 'a {
-        self.sessions.values().filter(move |s| s.host == host)
+    pub fn panes_for<'a>(&'a self, session: &'a str) -> impl Iterator<Item = &'a Pane> + 'a {
+        self.panes.values().filter(move |s| s.session == session)
     }
 
-    /// Workspaces in display order: by host name, then Herdr's ordinal.
+    /// Workspaces in display order: by session name, then Herdr's ordinal.
     pub fn workspaces_sorted(&self) -> Vec<&Workspace> {
         let mut list: Vec<&Workspace> = self.workspaces.values().collect();
-        list.sort_by(|a, b| a.host.cmp(&b.host).then_with(|| a.number.cmp(&b.number)));
+        list.sort_by(|a, b| {
+            a.session
+                .cmp(&b.session)
+                .then_with(|| a.number.cmp(&b.number))
+        });
         list
     }
 
-    /// Sessions in display order: blocked first, then most recently changed.
-    pub fn sessions_sorted(&self) -> Vec<&Session> {
-        let mut sessions: Vec<&Session> = self.sessions.values().collect();
-        sessions.sort_by(|a, b| {
+    /// Panes in display order: blocked first, then most recently changed.
+    pub fn panes_sorted(&self) -> Vec<&Pane> {
+        let mut panes: Vec<&Pane> = self.panes.values().collect();
+        panes.sort_by(|a, b| {
             a.state
                 .urgency()
                 .cmp(&b.state.urgency())
                 .then_with(|| b.updated_at_ms.cmp(&a.updated_at_ms))
                 .then_with(|| a.id.cmp(&b.id))
         });
-        sessions
+        panes
     }
 }
 
-fn same_ignoring_time(a: &[Session], b: &[Session]) -> bool {
+fn same_ignoring_time(a: &[Pane], b: &[Pane]) -> bool {
     a.len() == b.len()
         && a.iter().zip(b).all(|(x, y)| {
             let mut y = y.clone();
@@ -624,22 +637,22 @@ mod tests {
 
     #[test]
     fn connect_then_disconnect_tracks_host_status() {
-        let mut fleet = Fleet::with_hosts([("mini", false)], T0);
-        assert!(!fleet.hosts["mini"].connected);
+        let mut fleet = Fleet::with_sessions([("mini", Some("mini"))], T0);
+        assert!(!fleet.sessions["mini"].connected);
         assert!(fleet.apply(
             "mini",
-            HostEvent::Connected {
+            SessionEvent::Connected {
                 version: "0.9.0".into(),
                 protocol: 22
             },
             T0 + 1
         ));
-        assert!(fleet.hosts["mini"].connected);
-        assert_eq!(fleet.hosts["mini"].version.as_deref(), Some("0.9.0"));
+        assert!(fleet.sessions["mini"].connected);
+        assert_eq!(fleet.sessions["mini"].version.as_deref(), Some("0.9.0"));
         // Same connect again is a no-op.
         assert!(!fleet.apply(
             "mini",
-            HostEvent::Connected {
+            SessionEvent::Connected {
                 version: "0.9.0".into(),
                 protocol: 22
             },
@@ -647,25 +660,25 @@ mod tests {
         ));
         assert!(fleet.apply(
             "mini",
-            HostEvent::Disconnected {
+            SessionEvent::Disconnected {
                 error: "EOF".into()
             },
             T0 + 3
         ));
-        assert!(!fleet.hosts["mini"].connected);
-        assert_eq!(fleet.hosts["mini"].error.as_deref(), Some("EOF"));
-        assert_eq!(fleet.hosts["mini"].updated_at_ms, T0 + 3);
+        assert!(!fleet.sessions["mini"].connected);
+        assert_eq!(fleet.sessions["mini"].error.as_deref(), Some("EOF"));
+        assert_eq!(fleet.sessions["mini"].updated_at_ms, T0 + 3);
     }
 
     #[test]
     fn recorded_status_flow_replays_to_the_expected_states() {
         let mut fleet = Fleet::default();
         let pane = pane_from_fixture();
-        assert!(fleet.apply("studio", HostEvent::PaneCreated(Box::new(pane)), T0));
-        let session = &fleet.sessions["studio/w9:p2"];
-        assert_eq!(session.state, AgentState::Unknown);
-        assert_eq!(session.agent, None);
-        assert_eq!(session.cwd.as_deref(), Some("/Users/me/projects/lcars"));
+        assert!(fleet.apply("studio", SessionEvent::PaneCreated(Box::new(pane)), T0));
+        let pane = &fleet.panes["studio/w9:p2"];
+        assert_eq!(pane.state, AgentState::Unknown);
+        assert_eq!(pane.agent, None);
+        assert_eq!(pane.cwd.as_deref(), Some("/Users/me/projects/lcars"));
 
         // Recorded sequence: working, unknown, blocked, unknown, idle, unknown.
         // The trailing `unknown` after each report is Herdr releasing the
@@ -686,25 +699,25 @@ mod tests {
         let mut t = T0;
         for event in events {
             t += 100;
-            assert!(fleet.apply("studio", HostEvent::StatusChanged(event), t));
+            assert!(fleet.apply("studio", SessionEvent::StatusChanged(event), t));
         }
-        let session = &fleet.sessions["studio/w9:p2"];
-        assert_eq!(session.state, AgentState::Unknown);
-        assert_eq!(session.agent.as_deref(), Some("lcars-test"));
-        assert_eq!(session.updated_at_ms, T0 + 600);
+        let pane = &fleet.panes["studio/w9:p2"];
+        assert_eq!(pane.state, AgentState::Unknown);
+        assert_eq!(pane.agent.as_deref(), Some("lcars-test"));
+        assert_eq!(pane.updated_at_ms, T0 + 600);
 
         assert!(fleet.apply(
             "studio",
-            HostEvent::PaneClosed {
+            SessionEvent::PaneClosed {
                 pane_id: "w9:p2".into()
             },
             t
         ));
-        assert!(fleet.sessions.is_empty());
+        assert!(fleet.panes.is_empty());
         // Closing again changes nothing.
         assert!(!fleet.apply(
             "studio",
-            HostEvent::PaneClosed {
+            SessionEvent::PaneClosed {
                 pane_id: "w9:p2".into()
             },
             t
@@ -716,16 +729,16 @@ mod tests {
         let mut fleet = Fleet::default();
         fleet.apply(
             "h",
-            HostEvent::PaneCreated(Box::new(pane_from_fixture())),
+            SessionEvent::PaneCreated(Box::new(pane_from_fixture())),
             T0,
         );
         let blocked = status_events()
             .into_iter()
             .find(|e| e.agent_status == AgentStatus::Blocked)
             .unwrap();
-        assert!(fleet.apply("h", HostEvent::StatusChanged(blocked.clone()), T0 + 1));
-        assert!(!fleet.apply("h", HostEvent::StatusChanged(blocked), T0 + 2));
-        assert_eq!(fleet.sessions["h/w9:p2"].updated_at_ms, T0 + 1);
+        assert!(fleet.apply("h", SessionEvent::StatusChanged(blocked.clone()), T0 + 1));
+        assert!(!fleet.apply("h", SessionEvent::StatusChanged(blocked), T0 + 2));
+        assert_eq!(fleet.panes["h/w9:p2"].updated_at_ms, T0 + 1);
     }
 
     #[test]
@@ -735,18 +748,22 @@ mod tests {
             .into_iter()
             .find(|e| e.agent_status == AgentStatus::Blocked)
             .unwrap();
-        assert!(fleet.apply("h", HostEvent::StatusChanged(blocked), T0));
-        let session = &fleet.sessions["h/w9:p2"];
-        assert_eq!(session.state, AgentState::Blocked);
-        assert_eq!(session.workspace_id, "w9");
-        assert_eq!(session.agent.as_deref(), Some("lcars-test"));
+        assert!(fleet.apply("h", SessionEvent::StatusChanged(blocked), T0));
+        let pane = &fleet.panes["h/w9:p2"];
+        assert_eq!(pane.state, AgentState::Blocked);
+        assert_eq!(pane.workspace_id, "w9");
+        assert_eq!(pane.agent.as_deref(), Some("lcars-test"));
     }
 
     #[test]
     fn snapshot_replaces_only_that_hosts_sessions_and_overlays_agent_names() {
         let mut fleet = Fleet::default();
         let pane = pane_from_fixture();
-        fleet.apply("other", HostEvent::PaneCreated(Box::new(pane.clone())), T0);
+        fleet.apply(
+            "other",
+            SessionEvent::PaneCreated(Box::new(pane.clone())),
+            T0,
+        );
 
         let agent_json = serde_json::json!({
             "agent":"claude","agent_status":"working","cwd":"/Users/me/projects/lcars",
@@ -765,18 +782,18 @@ mod tests {
 
         assert!(fleet.apply(
             "studio",
-            HostEvent::Snapshot {
+            SessionEvent::Snapshot {
                 panes: vec![working_pane.clone()],
                 agents: vec![agent],
             },
             T0 + 1
         ));
-        assert_eq!(fleet.sessions.len(), 2, "other host's session survives");
-        let session = &fleet.sessions["studio/w9:p2"];
-        assert_eq!(session.name.as_deref(), Some("ops-dev"));
-        assert_eq!(session.seq, 4672);
-        assert_eq!(session.model.as_deref(), Some("fable-5-1"));
-        assert_eq!(session.state, AgentState::Working);
+        assert_eq!(fleet.panes.len(), 2, "other session's pane survives");
+        let pane = &fleet.panes["studio/w9:p2"];
+        assert_eq!(pane.name.as_deref(), Some("ops-dev"));
+        assert_eq!(pane.seq, 4672);
+        assert_eq!(pane.model.as_deref(), Some("fable-5-1"));
+        assert_eq!(pane.state, AgentState::Working);
 
         // Identical snapshot later: no change reported even though time moved.
         let agent_again: AgentInfo = serde_json::from_value(serde_json::json!({
@@ -787,24 +804,24 @@ mod tests {
         .unwrap();
         assert!(!fleet.apply(
             "studio",
-            HostEvent::Snapshot {
+            SessionEvent::Snapshot {
                 panes: vec![working_pane],
                 agents: vec![agent_again],
             },
             T0 + 2
         ));
 
-        // Empty snapshot clears the host.
+        // Empty snapshot clears the session.
         assert!(fleet.apply(
             "studio",
-            HostEvent::Snapshot {
+            SessionEvent::Snapshot {
                 panes: vec![],
                 agents: vec![]
             },
             T0 + 3
         ));
-        assert_eq!(fleet.sessions.len(), 1);
-        assert!(fleet.sessions.contains_key("other/w9:p2"));
+        assert_eq!(fleet.panes.len(), 1);
+        assert!(fleet.panes.contains_key("other/w9:p2"));
     }
 
     #[test]
@@ -817,17 +834,17 @@ mod tests {
         b.pane_id = "w1:p2".into();
         let mut c = pane;
         c.pane_id = "w1:p3".into();
-        fleet.apply("h", HostEvent::PaneCreated(Box::new(a)), T0 + 30);
-        fleet.apply("h", HostEvent::PaneCreated(Box::new(b)), T0 + 20);
-        fleet.apply("h", HostEvent::PaneCreated(Box::new(c)), T0 + 10);
+        fleet.apply("h", SessionEvent::PaneCreated(Box::new(a)), T0 + 30);
+        fleet.apply("h", SessionEvent::PaneCreated(Box::new(b)), T0 + 20);
+        fleet.apply("h", SessionEvent::PaneCreated(Box::new(c)), T0 + 10);
         let mut blocked = status_events()
             .into_iter()
             .find(|e| e.agent_status == AgentStatus::Blocked)
             .unwrap();
         blocked.pane_id = "w1:p3".into();
-        fleet.apply("h", HostEvent::StatusChanged(blocked), T0 + 5);
+        fleet.apply("h", SessionEvent::StatusChanged(blocked), T0 + 5);
         let order: Vec<&str> = fleet
-            .sessions_sorted()
+            .panes_sorted()
             .iter()
             .map(|s| s.pane_id.as_str())
             .collect();
@@ -851,17 +868,17 @@ mod tests {
         let mut fleet = Fleet::default();
         fleet.apply(
             "h",
-            HostEvent::PaneCreated(Box::new(pane_from_fixture())),
+            SessionEvent::PaneCreated(Box::new(pane_from_fixture())),
             T0,
         );
         assert_eq!(derive_state(&finished_agent(false)), AgentState::Done);
         assert_eq!(derive_state(&finished_agent(true)), AgentState::Idle);
         assert!(fleet.apply(
             "h",
-            HostEvent::AgentRefreshed(Box::new(finished_agent(false))),
+            SessionEvent::AgentRefreshed(Box::new(finished_agent(false))),
             T0 + 1
         ));
-        let s = &fleet.sessions["h/w9:p2"];
+        let s = &fleet.panes["h/w9:p2"];
         assert_eq!(s.state, AgentState::Done);
         assert_eq!(s.name.as_deref(), Some("conn-test"));
         assert_eq!(s.title.as_deref(), Some("Run ls -la"));
@@ -869,24 +886,24 @@ mod tests {
         assert_eq!(s.seq, 4718);
         assert!(!fleet.apply(
             "h",
-            HostEvent::AgentRefreshed(Box::new(finished_agent(false))),
+            SessionEvent::AgentRefreshed(Box::new(finished_agent(false))),
             T0 + 2
         ));
         assert!(fleet.apply(
             "h",
-            HostEvent::PaneFocused {
+            SessionEvent::PaneFocused {
                 pane_id: "w9:p2".into()
             },
             T0 + 3
         ));
-        let s = &fleet.sessions["h/w9:p2"];
+        let s = &fleet.panes["h/w9:p2"];
         assert_eq!(s.state, AgentState::Idle);
         assert!(s.focused);
         let mut pane = pane_from_fixture();
         pane.agent_status = AgentStatus::Idle;
         pane.terminal_title_stripped = Some("Run ls -la".into());
-        assert!(fleet.apply("h", HostEvent::PaneRefreshed(Box::new(pane)), T0 + 4));
-        assert_eq!(fleet.sessions["h/w9:p2"].state, AgentState::Idle);
+        assert!(fleet.apply("h", SessionEvent::PaneRefreshed(Box::new(pane)), T0 + 4));
+        assert_eq!(fleet.panes["h/w9:p2"].state, AgentState::Idle);
     }
 
     #[test]
@@ -897,13 +914,13 @@ mod tests {
         pane.agent_status = AgentStatus::Idle;
         assert!(fleet.apply(
             "h",
-            HostEvent::Snapshot {
+            SessionEvent::Snapshot {
                 panes: vec![pane],
                 agents: vec![finished_agent(false)],
             },
             T0
         ));
-        assert_eq!(fleet.sessions["h/w9:p2"].state, AgentState::Done);
+        assert_eq!(fleet.panes["h/w9:p2"].state, AgentState::Done);
         // A duplicate idle event (follow-up agent.get lost) does not clear done.
         let idle = PaneAgentStatusChangedEvent {
             pane_id: "w9:p2".into(),
@@ -914,8 +931,8 @@ mod tests {
             display_agent: None,
             state_labels: Default::default(),
         };
-        assert!(!fleet.apply("h", HostEvent::StatusChanged(idle), T0 + 1));
-        assert_eq!(fleet.sessions["h/w9:p2"].state, AgentState::Done);
+        assert!(!fleet.apply("h", SessionEvent::StatusChanged(idle), T0 + 1));
+        assert_eq!(fleet.panes["h/w9:p2"].state, AgentState::Done);
     }
 
     #[test]
@@ -925,13 +942,17 @@ mod tests {
         a.focused = true;
         let mut b = pane_from_fixture();
         b.pane_id = "w9:p3".into();
-        fleet.apply("h", HostEvent::PaneCreated(Box::new(a)), T0);
-        fleet.apply("h", HostEvent::PaneCreated(Box::new(b)), T0);
+        fleet.apply("h", SessionEvent::PaneCreated(Box::new(a)), T0);
+        fleet.apply("h", SessionEvent::PaneCreated(Box::new(b)), T0);
         let mut refreshed = finished_agent(true);
         refreshed.pane_id = "w9:p3".into();
-        assert!(fleet.apply("h", HostEvent::AgentRefreshed(Box::new(refreshed)), T0 + 1));
-        assert!(!fleet.sessions["h/w9:p2"].focused);
-        assert!(fleet.sessions["h/w9:p3"].focused);
+        assert!(fleet.apply(
+            "h",
+            SessionEvent::AgentRefreshed(Box::new(refreshed)),
+            T0 + 1
+        ));
+        assert!(!fleet.panes["h/w9:p2"].focused);
+        assert!(fleet.panes["h/w9:p3"].focused);
     }
 
     #[test]
@@ -939,33 +960,33 @@ mod tests {
         let mut fleet = Fleet::default();
         fleet.apply(
             "h",
-            HostEvent::PaneCreated(Box::new(pane_from_fixture())),
+            SessionEvent::PaneCreated(Box::new(pane_from_fixture())),
             T0,
         );
         assert!(fleet.apply(
             "h",
-            HostEvent::AgentDetected {
+            SessionEvent::AgentDetected {
                 pane_id: "w9:p2".into(),
                 agent: Some("claude".into()),
                 released: false
             },
             T0 + 1
         ));
-        assert_eq!(fleet.sessions["h/w9:p2"].agent.as_deref(), Some("claude"));
+        assert_eq!(fleet.panes["h/w9:p2"].agent.as_deref(), Some("claude"));
         assert!(fleet.apply(
             "h",
-            HostEvent::AgentDetected {
+            SessionEvent::AgentDetected {
                 pane_id: "w9:p2".into(),
                 agent: Some("claude".into()),
                 released: true
             },
             T0 + 2
         ));
-        assert_eq!(fleet.sessions["h/w9:p2"].agent, None);
-        assert_eq!(fleet.sessions["h/w9:p2"].state, AgentState::Unknown);
+        assert_eq!(fleet.panes["h/w9:p2"].agent, None);
+        assert_eq!(fleet.panes["h/w9:p2"].state, AgentState::Unknown);
         assert!(!fleet.apply(
             "h",
-            HostEvent::AgentDetected {
+            SessionEvent::AgentDetected {
                 pane_id: "w9:p9".into(),
                 agent: None,
                 released: false
@@ -979,12 +1000,12 @@ mod tests {
         let mut fleet = Fleet::default();
         fleet.apply(
             "h",
-            HostEvent::PaneCreated(Box::new(pane_from_fixture())),
+            SessionEvent::PaneCreated(Box::new(pane_from_fixture())),
             T0,
         );
         fleet.apply(
             "h",
-            HostEvent::AgentRefreshed(Box::new(finished_agent(true))),
+            SessionEvent::AgentRefreshed(Box::new(finished_agent(true))),
             T0 + 1,
         );
         let mut pane = pane_from_fixture();
@@ -993,15 +1014,15 @@ mod tests {
         pane.terminal_title_stripped = Some("Refactor the parser".into());
         assert!(fleet.apply(
             "h",
-            HostEvent::PaneRefreshed(Box::new(pane.clone())),
+            SessionEvent::PaneRefreshed(Box::new(pane.clone())),
             T0 + 2
         ));
-        let s = &fleet.sessions["h/w9:p2"];
+        let s = &fleet.panes["h/w9:p2"];
         assert_eq!(s.title.as_deref(), Some("Refactor the parser"));
         assert_eq!(s.state, AgentState::Working);
         assert_eq!(s.name.as_deref(), Some("conn-test"));
         assert_eq!(s.seq, 4718);
-        assert!(!fleet.apply("h", HostEvent::PaneRefreshed(Box::new(pane)), T0 + 3));
+        assert!(!fleet.apply("h", SessionEvent::PaneRefreshed(Box::new(pane)), T0 + 3));
     }
 
     #[test]
@@ -1021,7 +1042,7 @@ mod tests {
         };
         assert!(fleet.apply(
             "studio",
-            HostEvent::Workspaces(vec![
+            SessionEvent::Workspaces(vec![
                 ws("w4", 2, "railway", "idle", false),
                 ws("w1", 1, "dotfiles", "working", true)
             ]),
@@ -1029,7 +1050,7 @@ mod tests {
         ));
         assert!(fleet.apply(
             "mini",
-            HostEvent::Workspaces(vec![ws("w7", 1, "watch", "blocked", true)]),
+            SessionEvent::Workspaces(vec![ws("w7", 1, "watch", "blocked", true)]),
             T0
         ));
         let order: Vec<&str> = fleet
@@ -1043,7 +1064,7 @@ mod tests {
         // Same list again: no change. A shorter list drops the missing one.
         assert!(!fleet.apply(
             "studio",
-            HostEvent::Workspaces(vec![
+            SessionEvent::Workspaces(vec![
                 ws("w4", 2, "railway", "idle", false),
                 ws("w1", 1, "dotfiles", "working", true)
             ]),
@@ -1051,11 +1072,11 @@ mod tests {
         ));
         assert!(fleet.apply(
             "studio",
-            HostEvent::Workspaces(vec![ws("w1", 1, "dotfiles", "idle", true)]),
+            SessionEvent::Workspaces(vec![ws("w1", 1, "dotfiles", "idle", true)]),
             T0 + 2
         ));
         assert_eq!(fleet.workspaces.len(), 2);
-        assert!(!fleet.apply("studio", HostEvent::WorkspacesChanged, T0 + 3));
+        assert!(!fleet.apply("studio", SessionEvent::WorkspacesChanged, T0 + 3));
     }
 
     /// Screens recorded in docs/fixtures/claude-question-flow.json and
@@ -1085,7 +1106,7 @@ mod tests {
         let mut fleet = Fleet::default();
         fleet.apply(
             "h",
-            HostEvent::PaneCreated(Box::new(pane_from_fixture())),
+            SessionEvent::PaneCreated(Box::new(pane_from_fixture())),
             T0,
         );
         let blocked = status_events()
@@ -1095,23 +1116,23 @@ mod tests {
         // A read that lands on a non-blocked pane is dropped.
         assert!(!fleet.apply(
             "h",
-            HostEvent::PromptRead {
+            SessionEvent::PromptRead {
                 pane_id: "w9:p2".into(),
                 prompt: Some("Which colour?".into())
             },
             T0 + 1
         ));
-        fleet.apply("h", HostEvent::StatusChanged(blocked), T0 + 2);
+        fleet.apply("h", SessionEvent::StatusChanged(blocked), T0 + 2);
         assert!(fleet.apply(
             "h",
-            HostEvent::PromptRead {
+            SessionEvent::PromptRead {
                 pane_id: "w9:p2".into(),
                 prompt: Some("Which colour do you prefer?".into())
             },
             T0 + 3
         ));
         assert_eq!(
-            fleet.sessions["h/w9:p2"].pending_prompt.as_deref(),
+            fleet.panes["h/w9:p2"].pending_prompt.as_deref(),
             Some("Which colour do you prefer?")
         );
         // A pane refresh while still blocked keeps it.
@@ -1119,9 +1140,9 @@ mod tests {
         pane.agent_status = AgentStatus::Blocked;
         pane.agent = Some("lcars-test".into());
         pane.terminal_title_stripped = Some("t".into());
-        fleet.apply("h", HostEvent::PaneRefreshed(Box::new(pane)), T0 + 4);
+        fleet.apply("h", SessionEvent::PaneRefreshed(Box::new(pane)), T0 + 4);
         assert_eq!(
-            fleet.sessions["h/w9:p2"].pending_prompt.as_deref(),
+            fleet.panes["h/w9:p2"].pending_prompt.as_deref(),
             Some("Which colour do you prefer?")
         );
         // Leaving blocked clears it.
@@ -1129,8 +1150,8 @@ mod tests {
             .into_iter()
             .find(|e| e.agent_status == AgentStatus::Working)
             .unwrap();
-        assert!(fleet.apply("h", HostEvent::StatusChanged(working), T0 + 5));
-        assert_eq!(fleet.sessions["h/w9:p2"].pending_prompt, None);
+        assert!(fleet.apply("h", SessionEvent::StatusChanged(working), T0 + 5));
+        assert_eq!(fleet.panes["h/w9:p2"].pending_prompt, None);
     }
 
     #[test]
