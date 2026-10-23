@@ -4,8 +4,11 @@ import {
   clampPage,
   cycleEffort,
   cycleSession,
-  filterBySession,
+  filterKeys,
   focusedPane,
+  wallPageFor,
+  wallSlot,
+  workspacesFor,
   sessionNames,
   pageCount,
   pageSlice,
@@ -28,9 +31,45 @@ const keys = [
   s("studio/w1:p3"),
 ];
 
-test("session filter keeps only that session, null keeps all", () => {
-  expect(filterBySession(keys, "mini").map((k) => k.id)).toEqual(["mini/w7:p1"]);
-  expect(filterBySession(keys, null)).toHaveLength(4);
+const none = { sessionFilter: null, workspaceFilter: null };
+
+test("a session filter keeps that session plus every blocked agent elsewhere", () => {
+  expect(filterKeys(keys, none)).toHaveLength(4);
+  // mini/w7:p1 is the only mini pane; studio's blocked pane stays pinned.
+  expect(filterKeys(keys, { ...none, sessionFilter: "mini" }).map((k) => k.id)).toEqual(["mini/w7:p1", "studio/w1:p2"]);
+  const calm = keys.map((k) => ({ ...k, state: "idle" as const }));
+  expect(filterKeys(calm, { ...none, sessionFilter: "mini" }).map((k) => k.id)).toEqual(["mini/w7:p1"]);
+});
+
+test("a workspace filter narrows to that workspace, blocked agents still pinned", () => {
+  const mixed = [s("studio/w1:p1"), s("studio/w4:p1", { workspace_id: "w4" }), s("mini/w7:p1", { workspace_id: "w7", state: "blocked" })];
+  expect(filterKeys(mixed, { sessionFilter: "studio", workspaceFilter: "studio/w4" }).map((k) => k.id)).toEqual(["studio/w4:p1", "mini/w7:p1"]);
+  expect(filterKeys(mixed, { sessionFilter: null, workspaceFilter: "studio/w1" }).map((k) => k.id)).toEqual(["studio/w1:p1", "mini/w7:p1"]);
+});
+
+test("workspaces follow the session filter", () => {
+  const ws = (id: string) => {
+    const [session, workspace_id] = id.split("/");
+    return { id, session, workspace_id, number: 1, label: id, focused: false, pane_count: 1, state: "idle" as const };
+  };
+  const view: FleetView = { sessions: [], panes: [], workspaces: [ws("mini/w7"), ws("studio/w1"), ws("studio/w4")] };
+  expect(workspacesFor(view, null).map((w) => w.id)).toEqual(["mini/w7", "studio/w1", "studio/w4"]);
+  expect(workspacesFor(view, "studio").map((w) => w.id)).toEqual(["studio/w1", "studio/w4"]);
+  expect(workspacesFor(null, "studio")).toEqual([]);
+});
+
+test("the wall page wraps per deck size and slots index into it", () => {
+  const many = Array.from({ length: 28 }, (_, i) => s(`h/p${i}`));
+  // XL wall: 16 keys, 2 pages. MK.2 wall: 6 keys, 5 pages.
+  expect(wallPageFor(0, 28, 16)).toBe(0);
+  expect(wallPageFor(1, 28, 16)).toBe(1);
+  expect(wallPageFor(2, 28, 16)).toBe(0);
+  expect(wallPageFor(4, 28, 6)).toBe(4);
+  expect(wallPageFor(5, 28, 6)).toBe(0);
+  expect(wallSlot(many, 1, 16, 0)?.pane_id).toBe("p16");
+  expect(wallSlot(many, 1, 16, 11)?.pane_id).toBe("p27");
+  expect(wallSlot(many, 1, 16, 12)).toBeNull();
+  expect(wallSlot(many, 0, 0, 3)?.pane_id).toBe("p3");
 });
 
 test("paging is eight per page and clamps", () => {

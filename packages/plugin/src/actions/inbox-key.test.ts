@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { CONN_KEYS, INBOX_KEY_UUID, InboxKeyAction, LONG_PRESS_MS, slotConfig } from "./inbox-key";
+import { CONN_KEYS, INBOX_KEY_UUID, InboxKeyAction, LONG_PRESS_MS, slotConfig, wallSizeOf } from "./inbox-key";
 import { createFleetStore } from "../core/store";
 import manifest from "../../io.gamov.lcars.sdPlugin/manifest.json";
 
@@ -36,7 +36,7 @@ test("a press acts on the pane shown at key down, even if the deck reorders duri
   const ops = { focus: async () => false, scroll: async () => 0, prompt: async () => {}, sendKeys: async (id: string, keys: string[]) => { sent.push([id, keys]); }, focusWorkspace: async () => {} };
   const action = new InboxKeyAction(store, ops, { activate: async () => {} }, () => now);
   const alerts: string[] = [];
-  const ev = (settings: object) => ({ action: { id: "k1", showAlert: async () => { alerts.push("alert"); }, showOk: async () => {} }, payload: { settings } }) as never;
+  const ev = (settings: object) => ({ action: { id: "k1", device: { id: "d1" }, showAlert: async () => { alerts.push("alert"); }, showOk: async () => {} }, payload: { settings } }) as never;
   action.onKeyDown(ev({ slotIndex: "0" }));
   // Another agent blocks and sorts first while the finger is down.
   store.setView({ workspaces: [], sessions: [], panes: [mk("studio/w1:p9", "blocked", 3), mk("mini/w7:p1", "blocked", 1), mk("studio/w1:p1", "idle", 2)] });
@@ -69,7 +69,7 @@ test("a short tap raises the terminal only when Ops did not reveal the pane", as
   const store = createFleetStore();
   const pane = { id: "studio/w1:p1", session: "studio", workspace_id: "w1", tab_id: "w1:t1", pane_id: "w1:p1", agent: "claude", name: null, state: "idle", title: null, cwd: null, model: null, summary: null, pending_prompt: null, focused: false, seq: 0, updated_at_ms: 1 } as const;
   store.setView({ workspaces: [], sessions: [], panes: [pane] });
-  const ev = { action: { id: "k1", showAlert: async () => {}, showOk: async () => {} }, payload: { settings: { slotIndex: "0" } } } as never;
+  const ev = { action: { id: "k1", device: { id: "d1" }, showAlert: async () => {}, showOk: async () => {} }, payload: { settings: { slotIndex: "0" } } } as never;
   for (const revealed of [true, false]) {
     let raised = 0;
     const ops = { focus: async () => revealed, scroll: async () => 0, prompt: async () => {}, sendKeys: async () => {}, focusWorkspace: async () => {} };
@@ -78,6 +78,18 @@ test("a short tap raises the terminal only when Ops did not reveal the pane", as
     await action.onKeyUp(ev);
     expect(raised).toBe(revealed ? 0 : 1);
   }
+});
+
+test("a deck's wall size is its highest wall slot plus one, other decks and paged keys aside", () => {
+  const configs = [
+    { slot: 0, layout: "wall" as const, device: "xl" },
+    { slot: 15, layout: "wall" as const, device: "xl" },
+    { slot: 5, layout: "wall" as const, device: "mk2" },
+    { slot: 7, layout: "paged" as const, device: "plus" },
+  ];
+  expect(wallSizeOf(configs, "xl")).toBe(16);
+  expect(wallSizeOf(configs, "mk2")).toBe(6);
+  expect(wallSizeOf(configs, "plus")).toBe(0);
 });
 
 test("action uuid matches the manifest", () => {

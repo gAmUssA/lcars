@@ -7,6 +7,7 @@ import { createDials } from "./actions/dials";
 import { AttachAction, DictateAction, MuteBellAction, StopAllAction } from "./actions/global-keys";
 import { InboxKeyAction } from "./actions/inbox-key";
 import { WorkspaceKeyAction } from "./actions/workspace-key";
+import { SessionKeyAction } from "./actions/session-key";
 import { createOsa } from "./os/iterm";
 import { createFleetStore } from "./core/store";
 import { advance, EMPTY_BASELINE, type Baseline } from "./core/ping-baseline";
@@ -43,6 +44,7 @@ const bell = createBell({ enabled: () => bellEnabled });
 const terminal = createTerminalActivator({ app: process.env.LCARS_TERMINAL_APP });
 const inbox = new InboxKeyAction(store, ops, terminal);
 const workspaceKeys = new WorkspaceKeyAction(store, ops, terminal);
+const sessionKeys = new SessionKeyAction(store, (device) => inbox.wallSize(device));
 const dials = createDials({ store, ops, terminal });
 const osa = createOsa();
 const stopAll = new StopAllAction(store, ops);
@@ -63,6 +65,7 @@ let baseline: Baseline = EMPTY_BASELINE;
 store.subscribe((state) => {
   inbox.renderAll();
   workspaceKeys.renderAll();
+  sessionKeys.renderAll();
   for (const dial of dials) dial.renderAll();
   stopAll.renderAll();
   if (!state.healthy) {
@@ -104,6 +107,7 @@ const applyConnection = (settings: GlobalSettings): void => {
 streamDeck.settings.onDidReceiveGlobalSettings<GlobalSettings>((ev) => applyConnection(ev.settings));
 streamDeck.actions.registerAction(inbox);
 streamDeck.actions.registerAction(workspaceKeys);
+streamDeck.actions.registerAction(sessionKeys);
 for (const dial of dials) streamDeck.actions.registerAction(dial);
 for (const key of globals) streamDeck.actions.registerAction(key);
 

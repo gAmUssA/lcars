@@ -3,7 +3,7 @@
   "Name": "LCARS",
   "Version": "0.1.1.0",
   "Author": "Viktor Gamov",
-  "Description": "Herdr coding agents across every host on your Stream Deck, fed by the Ops daemon.",
+  "Description": "Herdr coding agents across every Herdr session and machine on your Stream Deck, fed by the Ops daemon.",
   "Category": "LCARS",
   "CategoryIcon": "imgs/plugin/category-icon",
   "Icon": "imgs/plugin/marketplace",
@@ -45,7 +45,7 @@
       "Name": "Workspace Key",
       "UUID": "io.gamov.lcars.workspace",
       "Icon": "imgs/actions/workspace/icon",
-      "Tooltip": "One Herdr workspace (by slot): colour is its agents' state, press switches that host's Herdr to it.",
+      "Tooltip": "One Herdr workspace (by slot, within the session filter): colour is its agents' state, press switches Herdr to it and narrows the agent keys to it.",
       "PropertyInspectorPath": "ui/workspace-key.html",
       "Controllers": [
         "Keypad"
@@ -53,6 +53,22 @@
       "States": [
         {
           "Image": "imgs/actions/workspace/icon",
+          "TitleAlignment": "bottom"
+        }
+      ]
+    },
+    {
+      "Name": "Session Key",
+      "UUID": "io.gamov.lcars.session",
+      "Icon": "imgs/actions/session/icon",
+      "Tooltip": "One Herdr session (by slot): colour is its worst agent. Tap filters the agent and workspace keys to it, long press turns the wall page.",
+      "PropertyInspectorPath": "ui/session-key.html",
+      "Controllers": [
+        "Keypad"
+      ],
+      "States": [
+        {
+          "Image": "imgs/actions/session/icon",
           "TitleAlignment": "bottom"
         }
       ]
@@ -71,7 +87,7 @@
         "TriggerDescription": {
           "Rotate": "Page the agent list",
           "Push": "Back to page 1",
-          "Touch": "Filter by host"
+          "Touch": "Filter by session"
         }
       },
       "States": [
@@ -81,10 +97,10 @@
       ]
     },
     {
-      "Name": "Machine Dial",
+      "Name": "Session Dial",
       "UUID": "io.gamov.lcars.dial.machine",
       "Icon": "imgs/actions/dial-machine/icon",
-      "Tooltip": "Cycles the host filter: all hosts, then each host in turn. Press shows all hosts.",
+      "Tooltip": "Cycles the session filter: all Herdr sessions, then each in turn. Press shows all sessions.",
       "Controllers": [
         "Encoder"
       ],
@@ -92,9 +108,9 @@
         "layout": "layouts/strip.json",
         "StackColor": "#9A7BD0",
         "TriggerDescription": {
-          "Rotate": "Cycle host filter",
-          "Push": "Show all hosts",
-          "Touch": "Filter by host"
+          "Rotate": "Cycle session filter",
+          "Push": "Show all sessions",
+          "Touch": "Filter by session"
         }
       },
       "States": [
@@ -117,7 +133,7 @@
         "TriggerDescription": {
           "Rotate": "Pick effort level",
           "Push": "Send /effort to focused Claude",
-          "Touch": "Filter by host"
+          "Touch": "Filter by session"
         }
       },
       "States": [
@@ -153,7 +169,7 @@
       "Name": "Attach",
       "UUID": "io.gamov.lcars.attach",
       "Icon": "imgs/actions/attach/icon",
-      "Tooltip": "Opens an iTerm2 window attached to a host's Herdr (ssh, mosh, or tmux).",
+      "Tooltip": "Opens an iTerm2 window attached to a machine's Herdr (ssh, mosh, or tmux).",
       "Controllers": [
         "Keypad"
       ],

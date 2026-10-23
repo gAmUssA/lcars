@@ -16,9 +16,9 @@ Ops called a Herdr server a "host" and an agent pane a "session"; Herdr calls th
 - [x] Config: `[[sessions]]` with `machine` + `socket`; old `[[hosts]]`/`ssh`/`remote_socket` still parse with a startup warning
 - [x] API: `FleetView` api 2 on `/fleet` and `/fleet/ws`; old routes 404; `machine` on each session
 - [x] Plugin: same rename, parser requires api 2
-- [ ] Session Key: one Herdr session per key, worst-state colour and counts, tap filters, long press pages the wall
-- [ ] Workspace filter: under a session filter the Workspace Keys show that session's workspaces; tap narrows the agents to it
-- [ ] Blocked agents from outside the filter stay pinned first
-- [ ] Wall paging on the XL and MK.2
+- [x] Session Key: one Herdr session per key, worst-state colour and counts, tap filters, long press pages the wall
+- [x] Workspace filter: under a session filter the Workspace Keys show that session's workspaces; tap narrows the agents to it
+- [x] Blocked agents from outside the filter stay pinned first
+- [x] Wall paging on the XL and MK.2
 - [ ] Manifest, property inspectors, README, AGENTS.md, skill, ops.toml.example, CHANGELOG, ADR 0003
 - [ ] Migrate the operator's ops.toml, install, verify on the deck

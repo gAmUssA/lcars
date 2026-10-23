@@ -39,7 +39,12 @@ test("scene reflects the store: sessions from the full list, blocked from the fi
   expect(scene.mode).toBe("ticker");
   expect(scene.sessions.map((h) => h.name)).toEqual(["studio", "mini"]);
   expect(scene.sessions[1].worst).toBe("blocked"); // unfiltered summary
-  expect(scene.blocked).toEqual([]); // filtered to studio, which has none
+  // Filtered to studio, but a blocked agent elsewhere is never hidden.
+  expect(scene.blocked.map((p) => p.id)).toEqual(["mini/w7:p1"]);
   expect(scene.totals.working).toBe(1);
   expect(scene.live).toBe(true);
+  expect(scene.workspaceLabel).toBeNull();
+  store.setView({ ...view, workspaces: [{ id: "studio/w1", session: "studio", workspace_id: "w1", number: 1, label: "dotfiles", focused: false, pane_count: 1, state: "working" }] });
+  store.toggleWorkspaceFilter("studio/w1");
+  expect(sceneFrom(store).workspaceLabel).toBe("dotfiles");
 });

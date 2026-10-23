@@ -26,6 +26,7 @@ export const LONG_PRESS_MS = 400;
 export const CONN_KEYS = ["enter"];
 
 type SlotConfig = { slot: number; display: DisplayMode; layout: KeyLayout };
+type PlacedConfig = SlotConfig & { device: string };
 
 export function slotConfig(settings: InboxSettings): SlotConfig {
   const parsed = Number(settings.slotIndex ?? 0);
@@ -38,8 +39,11 @@ export function slotConfig(settings: InboxSettings): SlotConfig {
   };
 }
 
-function paneFor(store: FleetStore, config: SlotConfig) {
-  return config.layout === "wall" ? store.paneAtAbsolute(config.slot) : store.paneAt(config.slot);
+/** Wall size of one deck: the highest wall slot on it, plus one. */
+export function wallSizeOf(configs: Iterable<{ slot: number; layout: KeyLayout; device: string }>, device: string): number {
+  let size = 0;
+  for (const c of configs) if (c.device === device && c.layout === "wall") size = Math.max(size, c.slot + 1);
+  return size;
 }
 
 export const INBOX_KEY_UUID = "io.gamov.lcars.inbox";
@@ -48,7 +52,7 @@ export const INBOX_KEY_UUID = "io.gamov.lcars.inbox";
 // source free of TC39 decorators so tsc, vitest and rollup agree on syntax.
 export class InboxKeyAction extends SingletonAction<InboxSettings> {
   override readonly manifestId = INBOX_KEY_UUID;
-  readonly #configs = new Map<string, SlotConfig>();
+  readonly #configs = new Map<string, PlacedConfig>();
   // What was under the finger when it went down: the deck can reorder
   // during a hold, and Conn must confirm the agent the operator saw.
   readonly #press = new Map<string, { at: number; paneId: string | null }>();
@@ -63,13 +67,22 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
   }
 
   override onWillAppear(ev: WillAppearEvent<InboxSettings>): void {
-    this.#configs.set(ev.action.id, slotConfig(ev.payload.settings));
+    this.#configs.set(ev.action.id, { ...slotConfig(ev.payload.settings), device: ev.action.device.id });
     this.renderAll();
   }
 
   override onDidReceiveSettings(ev: DidReceiveSettingsEvent<InboxSettings>): void {
-    this.#configs.set(ev.action.id, slotConfig(ev.payload.settings));
+    this.#configs.set(ev.action.id, { ...slotConfig(ev.payload.settings), device: ev.action.device.id });
     this.renderAll();
+  }
+
+  /** Wall keys on one deck; the Session Key pages by it. */
+  wallSize(device: string): number {
+    return wallSizeOf(this.#configs.values(), device);
+  }
+
+  paneFor(config: PlacedConfig) {
+    return config.layout === "wall" ? this.store.paneOnWall(config.slot, this.wallSize(config.device)) : this.store.paneAt(config.slot);
   }
 
   override onWillDisappear(ev: WillDisappearEvent<InboxSettings>): void {
@@ -78,7 +91,7 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
   }
 
   override onKeyDown(ev: KeyDownEvent<InboxSettings>): void {
-    const shown = paneFor(this.store, slotConfig(ev.payload.settings));
+    const shown = this.paneFor({ ...slotConfig(ev.payload.settings), device: ev.action.device.id });
     this.#press.set(ev.action.id, { at: this.now(), paneId: shown?.id ?? null });
   }
 
@@ -144,7 +157,7 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
       if (!a.isKey()) return;
       const config = this.#configs.get(a.id);
       if (!config) return;
-      if (paneFor(this.store, config)?.id === paneId) void a.showAlert();
+      if (this.paneFor(config)?.id === paneId) void a.showAlert();
     });
   }
 
@@ -153,13 +166,13 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
     const neverConnected = state.view === null;
     this.actions.forEach((a) => {
       if (!a.isKey()) return;
-      const config = this.#configs.get(a.id) ?? { slot: 0, display: "title" as DisplayMode, layout: "paged" as KeyLayout };
+      const config = this.#configs.get(a.id) ?? { slot: 0, display: "title" as DisplayMode, layout: "paged" as KeyLayout, device: a.device.id };
       void a.setTitle("");
       if (neverConnected) {
         void a.setImage(renderOfflineSvg());
         return;
       }
-      const pane = paneFor(this.store, config);
+      const pane = this.paneFor(config);
       const sessionUp = pane ? state.view?.sessions.find((h) => h.name === pane.session)?.connected !== false : true;
       void a.setImage(
         renderKeySvg(

@@ -1,6 +1,8 @@
-// Workspace Key: one Herdr workspace per key. Colour is Herdr's roll-up of
-// the agents inside, the label is the workspace name, the subtitle counts
-// agents and names the session. Press focuses the workspace and raises iTerm2.
+// Workspace Key: one Herdr workspace per key, within the session filter when
+// one is set. Colour is Herdr's roll-up of the agents inside, the label is
+// the workspace name, the subtitle counts agents, the corner names the
+// session. Press switches Herdr to the workspace, raises iTerm2 and narrows
+// the agent keys to it; pressing the narrowed workspace again widens them.
 import streamDeck, {
   SingletonAction,
   type DidReceiveSettingsEvent,
@@ -57,6 +59,7 @@ export class WorkspaceKeyAction extends SingletonAction<WorkspaceSettings> {
   override async onKeyDown(ev: KeyDownEvent<WorkspaceSettings>): Promise<void> {
     const workspace = this.store.workspaceAt(workspaceSlot(ev.payload.settings));
     if (!workspace) return;
+    this.store.toggleWorkspaceFilter(workspace.id);
     try {
       await this.ops.focusWorkspace(workspace.id);
       await this.terminal.activate();
@@ -86,6 +89,7 @@ export class WorkspaceKeyAction extends SingletonAction<WorkspaceSettings> {
           agents: agentsIn(this.store, workspace),
           session: multiSession ? workspace.session.slice(0, 4).toUpperCase() : null,
           focused: workspace.focused,
+          filtered: state.ui.workspaceFilter === workspace.id,
           live: state.healthy && sessionUp,
         }),
       );

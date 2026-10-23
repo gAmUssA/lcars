@@ -139,10 +139,19 @@ export type WorkspaceView = {
   agents: number;
   session: string | null;
   focused: boolean;
+  /** The agent keys are narrowed to this workspace. */
+  filtered?: boolean;
   live: boolean;
 };
 
-/** Workspace key: state colour, name, agent count, focus ring. */
+/** LCARS orange: marks the key whose filter is narrowing the agent keys. */
+export const FILTER_COLOR = "#FF9C00";
+
+function filterRing(on: boolean | undefined): string {
+  return on ? `<rect x="4" y="4" width="136" height="136" rx="14" fill="none" stroke="${FILTER_COLOR}" stroke-width="8"/>` : "";
+}
+
+/** Workspace key: state colour, name, agent count, focus ring, filter ring. */
 export function renderWorkspaceKey(view: WorkspaceView | null): string {
   if (!view) return renderEmptySvg();
   const { color } = presentation(view.state);
@@ -161,7 +170,56 @@ export function renderWorkspaceKey(view: WorkspaceView | null): string {
       session +
       labelSvg +
       `<text x="72" y="122" font-family="sans-serif" font-size="16" fill="#fff" fill-opacity="0.85" text-anchor="middle">${escapeXml(agents)}</text>` +
+      filterRing(view.filtered) +
       ring +
+      dim +
+      `</svg>`,
+  );
+}
+
+export type SessionView = {
+  /** Herdr session name as Ops lists it. */
+  name: string;
+  /** Machine tag for a remote session, or null on the deck's own machine. */
+  machine: string | null;
+  /** Worst agent state in the session; null when it has no agents. */
+  worst: AgentStatus | null;
+  agents: number;
+  blocked: number;
+  connected: boolean;
+  /** The agent keys are filtered to this session. */
+  selected: boolean;
+  /** "2/3" while the deck's wall has more than one page, else null. */
+  page: string | null;
+  live: boolean;
+};
+
+/** Session key: one Herdr session, coloured by its worst agent, filter ring when selected. */
+export function renderSessionKey(view: SessionView | null): string {
+  if (!view) return renderEmptySvg();
+  const color = view.connected && view.worst ? presentation(view.worst).color : "#3a3a3a";
+  const lines = wrapLabel(view.name, LABEL_CHARS_PER_LINE, 2);
+  const labelSvg = lines
+    .map((line, i) => `<text x="72" y="${64 + i * 22}" font-family="sans-serif" font-size="${LABEL_FONT_PX}" font-weight="bold" fill="#fff" text-anchor="middle">${escapeXml(line)}</text>`)
+    .join("");
+  const status = !view.connected
+    ? "offline"
+    : view.blocked > 0
+      ? `${view.blocked} blocked`
+      : view.agents === 1
+        ? "1 agent"
+        : `${view.agents} agents`;
+  const corner = (x: number, anchor: string, text: string | null): string =>
+    text ? `<text x="${x}" y="24" font-family="sans-serif" font-size="14" font-weight="bold" fill="#fff" fill-opacity="0.8" text-anchor="${anchor}">${escapeXml(text)}</text>` : "";
+  const dim = view.live && view.connected ? "" : `<rect width="144" height="144" rx="16" fill="#000" fill-opacity="0.6"/>`;
+  return toDataUri(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144">` +
+      `<rect width="144" height="144" rx="16" fill="${color}"/>` +
+      corner(10, "start", view.machine ? view.machine.slice(0, 6).toUpperCase() : "LOCAL") +
+      corner(136, "end", view.page) +
+      labelSvg +
+      `<text x="72" y="122" font-family="sans-serif" font-size="16" fill="#fff" fill-opacity="0.85" text-anchor="middle">${escapeXml(status)}</text>` +
+      filterRing(view.selected) +
       dim +
       `</svg>`,
   );

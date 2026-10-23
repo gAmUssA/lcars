@@ -1,7 +1,7 @@
-// Plugin-side view state the dials manipulate: session filter, page, touch
-// strip mode, ticker cursor, effort level. Pure functions; the store owns
-// the mutable copy.
-import type { FleetView, SessionStatus, Pane } from "../ops/types";
+// Plugin-side view state the keys and dials manipulate: session and
+// workspace filter, Plus page, wall page, touch strip mode, ticker cursor,
+// effort level. Pure functions; the store owns the mutable copy.
+import type { FleetView, SessionStatus, Pane, Workspace } from "../ops/types";
 
 export type StripMode = "fleet" | "ticker";
 
@@ -12,9 +12,14 @@ export type Effort = (typeof EFFORTS)[number];
 export const PAGE_SIZE = 8;
 
 export type ViewState = {
-  /** Session name, or null for every session. */
+  /** Herdr session name, or null for every session. */
   sessionFilter: string | null;
+  /** Workspace id (`<session>/<workspace_id>`), or null for every workspace. */
+  workspaceFilter: string | null;
+  /** Plus page (8 keys per page). */
   page: number;
+  /** Wall page counter; each deck wraps it by its own wall size. */
+  wallPage: number;
   stripMode: StripMode;
   /** Index into the blocked list shown by the ticker. */
   tickerIndex: number;
@@ -23,14 +28,53 @@ export type ViewState = {
 
 export const INITIAL_VIEW: ViewState = {
   sessionFilter: null,
+  workspaceFilter: null,
   page: 0,
+  wallPage: 0,
   stripMode: "fleet",
   tickerIndex: 0,
   effort: "high",
 };
 
-export function filterBySession(keys: Pane[], sessionFilter: string | null): Pane[] {
-  return sessionFilter === null ? keys : keys.filter((s) => s.session === sessionFilter);
+/** Workspace id of a pane, as Ops spells workspace ids. */
+export function workspaceIdOf(pane: Pane): string {
+  return `${pane.session}/${pane.workspace_id}`;
+}
+
+export type Filter = { sessionFilter: string | null; workspaceFilter: string | null };
+
+export function matchesFilter(pane: Pane, filter: Filter): boolean {
+  if (filter.sessionFilter !== null && pane.session !== filter.sessionFilter) return false;
+  if (filter.workspaceFilter !== null && workspaceIdOf(pane) !== filter.workspaceFilter) return false;
+  return true;
+}
+
+/**
+ * Panes that get a key under a filter. A blocked agent outside the filter
+ * stays: it needs the operator, and a filter must never hide a question.
+ * Ops sends blocked panes first, so pinned ones lead the list.
+ */
+export function filterKeys(keys: Pane[], filter: Filter): Pane[] {
+  return keys.filter((p) => p.state === "blocked" || matchesFilter(p, filter));
+}
+
+/** Workspaces the Workspace Keys show: one session's under a session filter, else all. */
+export function workspacesFor(view: FleetView | null, sessionFilter: string | null): Workspace[] {
+  const all = view?.workspaces ?? [];
+  return sessionFilter === null ? all : all.filter((w) => w.session === sessionFilter);
+}
+
+/** The wall page a deck with `wallSize` wall keys shows: the shared counter, wrapped. */
+export function wallPageFor(wallPage: number, count: number, wallSize: number): number {
+  if (wallSize <= 0) return 0;
+  const pages = pageCount(count, wallSize);
+  return ((Math.trunc(wallPage) % pages) + pages) % pages;
+}
+
+/** Pane at a wall slot on a deck with `wallSize` wall keys. */
+export function wallSlot(keys: Pane[], wallPage: number, wallSize: number, slot: number): Pane | null {
+  if (wallSize <= 0) return keys[slot] ?? null;
+  return keys[wallPageFor(wallPage, keys.length, wallSize) * wallSize + slot] ?? null;
 }
 
 export function pageCount(count: number, pageSize = PAGE_SIZE): number {

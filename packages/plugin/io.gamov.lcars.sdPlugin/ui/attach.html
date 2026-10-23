@@ -6,18 +6,18 @@
     <script src="https://sdpi-components.dev/releases/v4/sdpi-components.js"></script>
   </head>
   <body>
-    <sdpi-item label="Host">
+    <sdpi-item label="Machine">
       <sdpi-textfield setting="target" placeholder="ssh alias from ~/.ssh/config, or local"></sdpi-textfield>
     </sdpi-item>
     <sdpi-item label="Open with">
       <sdpi-select setting="mode" default="herdr">
-        <option value="herdr">ssh -t host herdr (local: herdr)</option>
-        <option value="mosh">mosh host -- herdr</option>
-        <option value="tmux">ssh -t host tmux attach (local: tmux attach)</option>
+        <option value="herdr">ssh -t machine herdr (local: herdr)</option>
+        <option value="mosh">mosh machine -- herdr</option>
+        <option value="tmux">ssh -t machine tmux attach (local: tmux attach)</option>
       </sdpi-select>
     </sdpi-item>
     <sdpi-item label="">
-      <p style="margin: 0; font-size: 8pt; color: #969696">Opens a new iTerm2 window. The host must be reachable without a password prompt (SSH keys or an open ControlMaster).</p>
+      <p style="margin: 0; font-size: 8pt; color: #969696">Opens a new iTerm2 window. The machine must be reachable without a password prompt (SSH keys or an open ControlMaster).</p>
     </sdpi-item>
   </body>
 </html>

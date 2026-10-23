@@ -1,8 +1,8 @@
 import { expect, test } from "vitest";
 import manifest from "../../io.gamov.lcars.sdPlugin/manifest.json";
 import { createFleetStore } from "../core/store";
-import { renderWorkspaceKey } from "../core/render";
-import { agentsIn, WORKSPACE_KEY_UUID, workspaceSlot } from "./workspace-key";
+import { FILTER_COLOR, renderWorkspaceKey } from "../core/render";
+import { agentsIn, WORKSPACE_KEY_UUID, WorkspaceKeyAction, workspaceSlot } from "./workspace-key";
 import type { FleetView, Pane, Workspace } from "../ops/types";
 
 function s(id: string, ws: string): Pane {
@@ -49,4 +49,30 @@ test("workspace key renders state colour, label, count, session tag and focus ri
   expect(quiet).not.toContain('stroke="#fff"');
   expect(quiet).toContain('fill-opacity="0.6"');
   expect(renderWorkspaceKey(null)).toContain("%23000");
+});
+
+test("a press focuses the workspace and narrows the agent keys to it; a second press widens them", async () => {
+  const store = createFleetStore();
+  store.setView({
+    sessions: [],
+    panes: [s("studio/w1:p1", "w1"), s("studio/w4:p1", "w4")],
+    workspaces: [ws("studio/w1", 1, "dotfiles", "idle"), ws("studio/w4", 2, "railway", "idle")],
+  });
+  const focused: string[] = [];
+  const ops = { focus: async () => false, scroll: async () => 0, prompt: async () => {}, sendKeys: async () => {}, focusWorkspace: async (id: string) => { focused.push(id); } };
+  const action = new WorkspaceKeyAction(store, ops, { activate: async () => {} });
+  const ev = { action: { id: "w", showAlert: async () => {} }, payload: { settings: { slotIndex: "1" } } } as never;
+  await action.onKeyDown(ev);
+  expect(focused).toEqual(["studio/w4"]);
+  expect(store.getState().keys.map((p) => p.id)).toEqual(["studio/w4:p1"]);
+  await action.onKeyDown(ev);
+  expect(store.getState().ui.workspaceFilter).toBeNull();
+  expect(store.getState().keys).toHaveLength(2);
+});
+
+test("the narrowed workspace wears the filter ring", () => {
+  const on = decodeURIComponent(renderWorkspaceKey({ label: "x", state: "idle", agents: 1, session: null, focused: false, filtered: true, live: true }).slice(19));
+  expect(on).toContain(`stroke="${FILTER_COLOR}"`);
+  const off = decodeURIComponent(renderWorkspaceKey({ label: "x", state: "idle", agents: 1, session: null, focused: false, live: true }).slice(19));
+  expect(off).not.toContain(FILTER_COLOR);
 });

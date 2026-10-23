@@ -15,6 +15,8 @@ export type StripScene = {
   mode: StripMode;
   sessions: SessionSummary[];
   sessionFilter: string | null;
+  /** Label of the workspace the keys are narrowed to, if any. */
+  workspaceLabel?: string | null;
   page: number;
   pages: number;
   effort: Effort;
@@ -80,7 +82,7 @@ function fleetScene(scene: StripScene): string {
   const labels: [string, string][] = [
     ["PAGE", `${scene.page + 1}/${scene.pages}`],
     ["EFFORT", scene.effort],
-    ["FILTER", scene.sessionFilter ?? "all"],
+    ["FILTER", scene.workspaceLabel ?? scene.sessionFilter ?? "all"],
   ];
   for (let i = sessions.length, l = 0; i < SEGMENTS && l < labels.length; i++, l++) {
     blocks.push(labelBlock(i, labels[l][0], labels[l][1], scene));
