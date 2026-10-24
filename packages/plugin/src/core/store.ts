@@ -15,6 +15,7 @@ import {
   focusedPane,
   sessionNames,
   INITIAL_VIEW,
+  PAGE_SIZE,
   pageSlice,
   type Effort,
   type ViewState,
@@ -50,6 +51,10 @@ export type FleetStore = {
   allKeys(): Pane[];
   movePage(step: number): void;
   resetPage(): void;
+  /** Agents per paged page: the number of paged Inbox Keys on the deck. Ignores 0. */
+  setPageSize(size: number): void;
+  /** Current agents per paged page (PAGE_SIZE until keys report otherwise). */
+  pageSize(): number;
   cycleSessionFilter(step: number): void;
   setSessionFilter(session: string | null): void;
   /** Filter to `session`, or clear the filter when it is already the one set. */
@@ -73,6 +78,7 @@ export function keyedPanes(view: FleetView): Pane[] {
 export function createFleetStore(opts: { localSession?: string | null } = {}): FleetStore {
   const localSession = opts.localSession ?? null;
   let all: Pane[] = [];
+  let pageSize = PAGE_SIZE;
   let state: StoreState = { view: null, healthy: false, keys: [], ui: { ...INITIAL_VIEW } };
   const subs = new Set<(s: StoreState) => void>();
   const emit = (): void => subs.forEach((fn) => fn(state));
@@ -80,7 +86,7 @@ export function createFleetStore(opts: { localSession?: string | null } = {}): F
   const recompute = (patch: Partial<StoreState> = {}, ui: Partial<ViewState> = {}): void => {
     const nextUi = { ...state.ui, ...ui };
     const keys = filterKeys(all, nextUi);
-    nextUi.page = clampPage(nextUi.page, keys.length);
+    nextUi.page = clampPage(nextUi.page, keys.length, pageSize);
     const blocked = blockedPanes(keys);
     nextUi.tickerIndex = blocked.length === 0 ? 0 : ((nextUi.tickerIndex % blocked.length) + blocked.length) % blocked.length;
     state = { ...state, ...patch, keys, ui: nextUi };
@@ -112,7 +118,7 @@ export function createFleetStore(opts: { localSession?: string | null } = {}): F
       emit();
     },
     paneAt(slot) {
-      return pageSlice(state.keys, state.ui.page)[slot] ?? null;
+      return pageSlice(state.keys, state.ui.page, pageSize)[slot] ?? null;
     },
     // The wall is "the n-th agent under the filter", paged by the deck's own
     // wall size so the XL and the MK.2 each show whole pages.
@@ -135,6 +141,13 @@ export function createFleetStore(opts: { localSession?: string | null } = {}): F
     resetPage() {
       recompute({}, { page: 0 });
     },
+    setPageSize(size) {
+      // Keys disappear one by one when a page is left; keep the last real size.
+      if (!Number.isInteger(size) || size <= 0 || size === pageSize) return;
+      pageSize = size;
+      recompute();
+    },
+    pageSize: () => pageSize,
     cycleSessionFilter(step) {
       store.setSessionFilter(cycleSession(sessionNames(state.view), state.ui.sessionFilter, step));
     },

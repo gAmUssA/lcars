@@ -40,7 +40,7 @@ export function sceneFrom(store: FleetStore): StripScene {
     sessionFilter: s.ui.sessionFilter,
     workspaceLabel: s.view?.workspaces.find((w) => w.id === s.ui.workspaceFilter)?.label ?? null,
     page: s.ui.page,
-    pages: pageCount(s.keys.length),
+    pages: pageCount(s.keys.length, store.pageSize()),
     effort: s.ui.effort,
     blocked: blockedPanes(s.keys),
     tickerIndex: s.ui.tickerIndex,

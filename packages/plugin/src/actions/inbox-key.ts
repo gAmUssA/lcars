@@ -33,7 +33,7 @@ export function slotConfig(settings: InboxSettings): SlotConfig {
   return {
     slot: Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : 0,
     display: settings.display === "project" ? "project" : "title",
-    // "paged" follows the Plus scroll dial (8 per page); "wall" is an absolute
+    // "paged" follows the Plus scroll dial (one page per paged key set); "wall" is an absolute
     // slot over the whole list, for the XL where every agent has its own key.
     layout: settings.layout === "wall" ? "wall" : "paged",
   };
@@ -43,6 +43,17 @@ export function slotConfig(settings: InboxSettings): SlotConfig {
 export function wallSizeOf(configs: Iterable<{ slot: number; layout: KeyLayout; device: string }>, device: string): number {
   let size = 0;
   for (const c of configs) if (c.device === device && c.layout === "wall") size = Math.max(size, c.slot + 1);
+  return size;
+}
+
+/**
+ * Paged keys across the decks: the highest paged slot plus one, or 0 when
+ * none is placed. The Plus pages agents by it, so a page that gives up a key
+ * (for a Rooms key, say) still shows every agent.
+ */
+export function pagedSizeOf(configs: Iterable<{ slot: number; layout: KeyLayout }>): number {
+  let size = 0;
+  for (const c of configs) if (c.layout === "paged") size = Math.max(size, c.slot + 1);
   return size;
 }
 
@@ -68,11 +79,13 @@ export class InboxKeyAction extends SingletonAction<InboxSettings> {
 
   override onWillAppear(ev: WillAppearEvent<InboxSettings>): void {
     this.#configs.set(ev.action.id, { ...slotConfig(ev.payload.settings), device: ev.action.device.id });
+    this.store.setPageSize(pagedSizeOf(this.#configs.values()));
     this.renderAll();
   }
 
   override onDidReceiveSettings(ev: DidReceiveSettingsEvent<InboxSettings>): void {
     this.#configs.set(ev.action.id, { ...slotConfig(ev.payload.settings), device: ev.action.device.id });
+    this.store.setPageSize(pagedSizeOf(this.#configs.values()));
     this.renderAll();
   }
 

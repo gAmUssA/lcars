@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Paged Inbox Keys page by how many the deck has (highest paged slot plus one) instead of a fixed 8, so a Plus page that gives a key to something else still shows every agent; the Scroll Dial counts pages the same way.
 - Herdr's names end to end (ADR 0003): Ops "hosts" are Herdr sessions and Ops "sessions" are panes. `ops.toml` takes `[[sessions]]` with `machine` (SSH alias) and `socket`; old `[[hosts]]`, `ssh` and `remote_socket` keys still work and log a warning. **Breaking:** the plugin API is `FleetView` api 2 on `GET /fleet` and `/fleet/ws` (was `/sessions` and `/ws`), action bodies name `pane`; install Ops and the plugin from the same release.
 - Session Key: one Herdr session per key, coloured by its worst agent, machine in the corner. Tap filters the agent wall and the Workspace Keys to the session; long press turns the wall page. A Workspace Key press now also narrows the agents to that workspace. Blocked agents outside a filter stay on the wall, first.
 - The agent wall follows the filter and pages by each deck's wall size (it showed only the first 16 agents before). The Plus fleet bar and the Session Dial (formerly Machine Dial, same action id) set the same filter.
