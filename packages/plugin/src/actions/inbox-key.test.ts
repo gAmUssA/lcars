@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { CONN_KEYS, INBOX_KEY_UUID, InboxKeyAction, LONG_PRESS_MS, slotConfig, wallSizeOf } from "./inbox-key";
+import { CONN_KEYS, INBOX_KEY_UUID, InboxKeyAction, LONG_PRESS_MS, pagedSizeOf, slotConfig, wallSizeOf } from "./inbox-key";
 import { createFleetStore } from "../core/store";
 import manifest from "../../io.gamov.lcars.sdPlugin/manifest.json";
 
@@ -90,6 +90,11 @@ test("a deck's wall size is its highest wall slot plus one, other decks and page
   expect(wallSizeOf(configs, "xl")).toBe(16);
   expect(wallSizeOf(configs, "mk2")).toBe(6);
   expect(wallSizeOf(configs, "plus")).toBe(0);
+});
+
+test("the paged size is the highest paged slot plus one, wall keys aside", () => {
+  expect(pagedSizeOf([{ slot: 0, layout: "paged" }, { slot: 6, layout: "paged" }, { slot: 15, layout: "wall" }])).toBe(7);
+  expect(pagedSizeOf([{ slot: 3, layout: "wall" }])).toBe(0);
 });
 
 test("action uuid matches the manifest", () => {

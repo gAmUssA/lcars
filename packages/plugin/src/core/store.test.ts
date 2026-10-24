@@ -93,6 +93,20 @@ test("paging moves through keys and resets", () => {
   expect(store.paneAt(0)?.pane_id).toBe("p0");
 });
 
+test("a 7-key paged page shows every agent: the 8th lands on page 2", () => {
+  const store = createFleetStore();
+  store.setView({ workspaces: [], sessions: [], panes: Array.from({ length: 11 }, (_, i) => pane(`h/p${i}`, "claude")) });
+  store.setPageSize(7);
+  expect(store.pageSize()).toBe(7);
+  expect(store.paneAt(6)?.pane_id).toBe("p6");
+  store.movePage(1);
+  expect(store.paneAt(0)?.pane_id).toBe("p7");
+  expect(store.paneAt(3)?.pane_id).toBe("p10");
+  // Zero (every paged key gone mid-transition) keeps the last real size.
+  store.setPageSize(0);
+  expect(store.pageSize()).toBe(7);
+});
+
 test("the wall follows the filter and pages by the deck's wall size", () => {
   const store = createFleetStore();
   const panes = [
